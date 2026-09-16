@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { getD1 } from '@/db';
-import { SEED_LEADS } from '@/db/seed-data';
+import { SALES_SCRIPTS, SEED_LEADS } from '@/db/seed-data';
 
 export const STAGES = ['01 PROSPECTADO','02 QUALIFICADO','03 CONTATO PRONTO','04 MENSAGEM ENVIADA','05 RESPONDEU','06 INTERESSADO','07 PRÉVIA ACEITA','08 PRÉVIA EM PRODUÇÃO','09 PRÉVIA ENVIADA','10 NEGOCIAÇÃO','11 FECHADO','12 PAGO','13 EM PRODUÇÃO','14 ENTREGUE','15 FOLLOW-UP','16 PERDIDO'] as const;
 
@@ -45,3 +45,19 @@ export async function updateLead(input:{id:string;action?:string;stage?:string;v
 }
 
 export async function addNote(id:string,body:string){if(!body.trim())throw new Error('A nota não pode ficar vazia.');await ensureSeeded();const db=getD1();await db.prepare('INSERT INTO lead_notes (lead_id,body,created_at) VALUES (?,?,?)').bind(id,body.trim(),new Date().toISOString()).run();return bootstrap()}
+
+export async function addManualLead(input:{clinic?:string;city?:string;neighborhood?:string;phone?:string;whatsapp?:string;services?:string}) {
+  const clinic=input.clinic?.trim(), city=input.city?.trim(), phone=input.phone?.trim();
+  if(!clinic||!city||!phone)throw new Error('Preencha clínica, cidade e telefone.');
+  await ensureSeeded(); const db=getD1();
+  const max=await db.prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads').first<{value:number}>();
+  const leadNumber=(max?.value??0)+1, now=new Date().toISOString();
+  const digits=(input.whatsapp||phone).replace(/\D/g,'');
+  const normalized=digits.length>=12?digits:digits.length>=10?`55${digits}`:'';
+  const whatsappUrl=normalized?`https://wa.me/${normalized}`:'Não disponível';
+  const id=`lead-manual-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+  const stage=normalized?'03 CONTATO PRONTO':'02 QUALIFICADO';
+  const insert=db.prepare('INSERT INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,leadNumber,clinic,`${city} / ${input.neighborhood?.trim()||'bairro a confirmar'}`,city,input.neighborhood?.trim()||'bairro a confirmar',stage,1,'Lead adicionado manualmente — qualificação pendente','Novo','A confirmar','Lead manual ainda precisa de pesquisa e qualificação.','Não confirmado',0,0,input.services?.trim()||'Não verificados',phone,whatsappUrl,'Lead adicionado manualmente para pesquisa e prospecção.','Dados informados manualmente; confirme presença, serviços e contato antes da abordagem.',SALES_SCRIPTS.noSite,'[]',now,now);
+  const event=db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(id,'Lead adicionado manualmente',null,stage,null,now);
+  await db.batch([insert,event]); return bootstrap();
+}
