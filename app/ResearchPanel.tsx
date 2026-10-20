@@ -68,7 +68,10 @@ export default function ResearchPanel({
     [selected, setSelected] = useState<Set<string>>(new Set()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    [pasted, setPasted] = useState('');
+  const mapsQuery = `agências de ${category === 'design' ? 'design' : category === 'comunicacao' ? 'comunicação' : category === 'marketing' ? 'marketing' : 'marketing e comunicação'} em ${city.trim() || state} ${city.trim() ? state : ''}`;
+  const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}`;
   const request = async (body: Record<string, unknown>): Promise<any> => {
     const response = await fetch('/api/crm/research', {
       method: 'POST',
@@ -121,6 +124,43 @@ export default function ResearchPanel({
         `${imported.imported} agência(s) adicionada(s) à fila ${result.location}.`,
       );
       onImported(imported.data, result.location);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao importar.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const importPasted = async () => {
+    setError('');
+    const rows = pasted
+      .split(/\r?\n/)
+      .map((line) => {
+        const [name, contact, email, phone] = line
+          .split('|')
+          .map((part) => part.trim());
+        return { name, contact, email, phone };
+      })
+      .filter((row) => row.name);
+    if (!rows.length) {
+      setError('Cole ao menos uma agência, uma por linha.');
+      return;
+    }
+    if (rows.length > 100) {
+      setError('Importe no máximo 100 agências por vez.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const imported = await request({
+        action: 'import_pasted',
+        city: city.trim(),
+        state,
+        rows,
+      });
+      setMessage(
+        `${imported.imported} agência(s) adicionada(s) à fila ${imported.location}.`,
+      );
+      onImported(imported.data, imported.location);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao importar.');
     } finally {
@@ -200,6 +240,41 @@ export default function ResearchPanel({
       </p>
       {error && <div className="research-error">{error}</div>}
       {message && <div className="research-message">{message}</div>}
+      <section className="manual-research">
+        <div>
+          <span>PLANO GRATUITO DE CONTINGÊNCIA</span>
+          <h3>Pesquisar no mapa e importar em lote</h3>
+          <p>
+            Se a busca automática estiver indisponível, abra o mapa com a cidade
+            e categoria já preenchidas. Copie os dados públicos das agências que
+            escolher e cole uma por linha abaixo. O CRM separa a lista por
+            região e elimina nomes repetidos.
+          </p>
+        </div>
+        <a href={mapsUrl} target="_blank" rel="noreferrer">
+          <ArrowUpRight size={16} /> Abrir busca no Google Maps
+        </a>
+        <label>
+          Uma agência por linha:{' '}
+          <code>
+            Nome | https://site-ou-contato | email@agencia.com | telefone
+          </code>
+          <textarea
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+            placeholder={
+              'Agência Exemplo | https://exemplo.com.br | contato@exemplo.com.br | (41) 99999-9999\nOutra Agência | https://outra.com.br'
+            }
+          />
+        </label>
+        <button
+          className="outline"
+          disabled={busy || !pasted.trim()}
+          onClick={importPasted}
+        >
+          <UploadCloud size={16} /> Importar lista colada
+        </button>
+      </section>
       {result && (
         <>
           <div className="research-results-head">

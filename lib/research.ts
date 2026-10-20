@@ -110,7 +110,7 @@ function queryFor(city: string, state: string, category: Category) {
     sections.push(
       'nwr(area.searchArea)["office"="company"]["name"~"marketing|publicidade|agencia|agência|digital",i];',
     );
-  return `[out:json][timeout:20][maxsize:10485760];${stateArea}${cityArea}(${sections.join('')});out center 300;`;
+  return `[out:json][timeout:12][maxsize:10485760];${stateArea}${cityArea}(${sections.join('')});out center 300;`;
 }
 export async function searchAgencies(input: {
   city?: string;
@@ -135,7 +135,7 @@ export async function searchAgencies(input: {
           accept: 'application/json',
         },
         body: new URLSearchParams({ data: query }),
-        signal: AbortSignal.timeout(22000),
+        signal: AbortSignal.timeout(12000),
       });
       if (!response.ok) continue;
       const payload = (await response.json()) as { elements?: OSMElement[] };
@@ -312,4 +312,94 @@ export async function importAgencies(input: {
   }
   if (inserts.length) await db.batch(inserts);
   return { imported: inserts.length, data: await bootstrap() };
+}
+
+export async function importPastedAgencies(input: {
+  city?: string;
+  state?: string;
+  rows?: { name?: string; contact?: string; email?: string; phone?: string }[];
+}) {
+  const { city, state } = validate({
+    city: input.city,
+    state: input.state,
+    limit: 50,
+  });
+  if (
+    !Array.isArray(input.rows) ||
+    input.rows.length < 1 ||
+    input.rows.length > 100
+  )
+    throw new Error('Cole entre 1 e 100 agências.');
+  const location = `${city || STATES[state]} · ${state}`;
+  const db = getD1();
+  const existing = (
+    await db
+      .prepare(
+        "SELECT clinic FROM leads WHERE id LIKE 'agency-%' AND location=?",
+      )
+      .bind(location)
+      .all()
+  ).results as { clinic: string }[];
+  const names = new Set(existing.map((item) => normalize(item.clinic)));
+  const max = await db
+    .prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads')
+    .first<{ value: number }>();
+  let number = max?.value ?? 0;
+  const now = new Date().toISOString();
+  const inserts = [];
+  for (const row of input.rows) {
+    const name = safeText(row.name, 120);
+    if (!name || names.has(normalize(name))) continue;
+    names.add(normalize(name));
+    const contact = cleanUrl(row.contact);
+    const email = safeText(row.email, 120);
+    const phone = safeText(row.phone, 50);
+    if (row.contact && !contact)
+      throw new Error(`Link inválido para ${name}. Use https://.`);
+    const opening = `Oi, pessoal da ${name}! Sou designer e desenvolvedor e posso apoiar a equipe em demandas pontuais, como criativos, landing pages e automações. Vocês têm alguma entrega em que precisem de reforço esta semana?`;
+    inserts.push(
+      db
+        .prepare(
+          'INSERT OR IGNORE INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        )
+        .bind(
+          `agency-pasted-${crypto.randomUUID()}`,
+          ++number,
+          name,
+          location,
+          city || STATES[state],
+          '—',
+          '01 PESQUISADA',
+          1,
+          'Importação manual — verificar dados',
+          'Nova',
+          'Possível apoio de produção; demanda não confirmada.',
+          'Possível apoio de produção; demanda não confirmada.',
+          email,
+          0,
+          0,
+          'comunicação, marketing ou design (confirmar serviços)',
+          phone,
+          contact,
+          'Possível parceria; necessidade ainda não confirmada.',
+          'Agência colada pelo usuário; confirme a fonte, serviços, localização e canal antes de abordar.',
+          opening,
+          JSON.stringify(
+            contact
+              ? [
+                  {
+                    type: 'Link informado',
+                    url: contact,
+                    use: 'Verificar antes de abordar',
+                  },
+                ]
+              : [],
+          ),
+          now,
+          now,
+        ),
+    );
+  }
+  if (inserts.length) await db.batch(inserts);
+  return { imported: inserts.length, data: await bootstrap(), location };
 }
