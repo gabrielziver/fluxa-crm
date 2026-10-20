@@ -230,13 +230,13 @@ export default function ResearchPanel({
           onClick={search}
         >
           <Search size={16} />
-          {busy ? 'Pesquisando…' : 'Pesquisar agências'}
+          {busy ? 'Pesquisando…' : 'Tentar busca automática (OSM)'}
         </button>
       </div>
       <p className="research-note">
-        A fonte é comunitária e pode estar incompleta ou temporariamente
-        indisponível. Sem Google Maps pago e sem disparo automático de
-        mensagens.
+        Busca automática experimental: a fonte comunitária pode ter poucos
+        registros ou ficar indisponível. A importação em lote abaixo funciona
+        mesmo sem ela. Sem Google Maps pago e sem disparo automático.
       </p>
       {error && <div className="research-error">{error}</div>}
       {message && <div className="research-message">{message}</div>}

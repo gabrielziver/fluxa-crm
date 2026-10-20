@@ -149,7 +149,7 @@ export async function searchAgencies(input: {
   }
   if (!elements)
     throw new Error(
-      'A fonte pública do mapa está indisponível agora. Tente novamente mais tarde ou adicione agências manualmente.',
+      'A fonte pública do mapa está indisponível agora. Use a busca no Google Maps e a importação em lote abaixo.',
     );
   const seen = new Set<string>();
   const candidates: Candidate[] = [];
