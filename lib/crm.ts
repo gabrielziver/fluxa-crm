@@ -77,9 +77,16 @@ export async function bootstrap(){
 }
 const ACTIONS:Record<string,{stage:string;event:string}>={ready:{stage:'02 PRONTA',event:'Contato qualificado'},mark_sent:{stage:'03 MENSAGEM ENVIADA',event:'Mensagem enviada'},mark_replied:{stage:'04 RESPONDEU',event:'Resposta recebida'},demand:{stage:'05 DEMANDA IDENTIFICADA',event:'Demanda identificada'},proposal:{stage:'06 PROPOSTA ENVIADA',event:'Proposta enviada'},sale:{stage:'07 FECHADA',event:'Parceria fechada'},lost:{stage:'08 PERDIDA',event:'Oportunidade perdida'}};
 
-export async function updateLead(input:{id:string;action?:string;stage?:string;value?:number;followUpAt?:string}){
-  if(!isAgency(input.id||''))throw new Error('Lead fora da operação de agências.');await ensureSeeded();const db=getD1();const lead=await db.prepare('SELECT stage FROM leads WHERE id=?').bind(input.id).first<{stage:string}>();if(!lead)throw new Error('Agência não encontrada.');
+export async function updateLead(input:{id:string;action?:string;stage?:string;value?:number;followUpAt?:string;contact?:string;email?:string;phone?:string}){
+  if(!isAgency(input.id||''))throw new Error('Lead fora da operação de agências.');await ensureSeeded();const db=getD1();const lead=await db.prepare('SELECT stage,whatsapp_url,instagram,phone FROM leads WHERE id=?').bind(input.id).first<{stage:string;whatsapp_url:string;instagram:string;phone:string}>();if(!lead)throw new Error('Agência não encontrada.');
   const now=new Date().toISOString();
+  if(input.action==='update_contact'){
+    const contact=input.contact?.trim()||'',email=input.email?.trim()||'',phone=input.phone?.trim()||'';
+    if(contact&&!/^https:\/\//i.test(contact))throw new Error('O site ou link de contato deve começar com https://.');
+    if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Informe um e-mail válido.');
+    if(!contact&&!email&&!phone)throw new Error('Informe ao menos um canal de contato.');
+    await db.prepare('UPDATE leads SET whatsapp_url=?,instagram=?,phone=?,updated_at=? WHERE id=?').bind(contact,email,phone,now,input.id).run();return bootstrap();
+  }
   if(input.action==='schedule_followup'){
     if(['07 FECHADA','08 PERDIDA'].includes(lead.stage))throw new Error('Esta oportunidade já foi concluída.');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(input.followUpAt||''))throw new Error('Informe uma data válida.');
@@ -87,6 +94,7 @@ export async function updateLead(input:{id:string;action?:string;stage?:string;v
   }
   const allowed:Record<string,string[]>={ready:['01 PESQUISADA'],mark_sent:['02 PRONTA'],mark_replied:['03 MENSAGEM ENVIADA'],demand:['04 RESPONDEU'],proposal:['05 DEMANDA IDENTIFICADA'],sale:['06 PROPOSTA ENVIADA'],lost:['01 PESQUISADA','02 PRONTA','03 MENSAGEM ENVIADA','04 RESPONDEU','05 DEMANDA IDENTIFICADA','06 PROPOSTA ENVIADA']};
   if(!input.action||!allowed[input.action]?.includes(lead.stage))throw new Error('Esta ação não corresponde à etapa atual.');
+  if(input.action==='ready'&&!lead.whatsapp_url&&!lead.instagram&&!lead.phone)throw new Error('Encontre e confira um canal de contato antes de marcar como pronta.');
   const def=ACTIONS[input.action];if(!def)throw new Error('Ação inválida.');
   const fields:Record<string,unknown>={stage:def.stage,updated_at:now};
   if(input.action==='mark_sent'){fields.first_contact_at=now;fields.last_contact_at=now;fields.next_follow_up_at=input.followUpAt||plusDays(2)}
@@ -98,8 +106,8 @@ export async function updateLead(input:{id:string;action?:string;stage?:string;v
   const keys=Object.keys(fields);await db.batch([db.prepare(`UPDATE leads SET ${keys.map(k=>`${k}=?`).join(',')} WHERE id=?`).bind(...keys.map(k=>fields[k]),input.id),db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(input.id,def.event,lead.stage,def.stage,JSON.stringify({value:input.value}),now)]);return bootstrap();
 }
 export async function addNote(id:string,body:string){if(!isAgency(id))throw new Error('Lead fora da operação de agências.');if(!body.trim())throw new Error('Escreva uma nota.');await ensureSeeded();const db=getD1();await db.prepare('INSERT INTO lead_notes (lead_id,body,created_at) VALUES (?,?,?)').bind(id,body.trim(),new Date().toISOString()).run();return bootstrap()}
-export async function addManualLead(input:{name?:string;city?:string;contact?:string;email?:string;focus?:string;opportunity?:string;opening?:string}){
+export async function addManualLead(input:{name?:string;city?:string;state?:string;contact?:string;email?:string;focus?:string;opportunity?:string;opening?:string}){
   const name=input.name?.trim(),contact=input.contact?.trim(),email=input.email?.trim();if(!name||(!contact&&!email))throw new Error('Informe o nome e um canal de contato.');if(contact&&!/^https:\/\//i.test(contact))throw new Error('O link deve começar com https://.');
-  await ensureSeeded();const db=getD1();const max=await db.prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads').first<{value:number}>();const now=new Date().toISOString();const id=`agency-manual-${crypto.randomUUID()}`;const city=input.city?.trim()||'A confirmar';const focus=input.focus?.trim()||'serviços a confirmar';
-  await db.batch([db.prepare('INSERT INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,(max?.value??0)+1,name,city,city,'—','01 PESQUISADA',1,'Lead manual — verificar dados','Nova',input.opportunity?.trim()||'A investigar',input.opportunity?.trim()||'A investigar',email||'',0,0,focus,'',contact||'','Necessidade ainda não confirmada.','Lead manual; verificar contato e serviços antes de enviar.',input.opening?.trim()||intro(name,focus),JSON.stringify(contact?[{type:'Contato informado',url:contact,use:'Verificar antes de abordar'}]:[]),now,now),db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(id,'Agência adicionada',null,'01 PESQUISADA',null,now)]);return bootstrap();
+  await ensureSeeded();const db=getD1();const max=await db.prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads').first<{value:number}>();const now=new Date().toISOString();const id=`agency-manual-${crypto.randomUUID()}`;const city=input.city?.trim()||'A confirmar';const state=input.state?.trim().toUpperCase()||'';const location=state?`${city} · ${state}`:city;const focus=input.focus?.trim()||'serviços a confirmar';
+  await db.batch([db.prepare('INSERT INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,(max?.value??0)+1,name,location,city,'—','01 PESQUISADA',1,'Lead manual — verificar dados','Nova',input.opportunity?.trim()||'A investigar',input.opportunity?.trim()||'A investigar',email||'',0,0,focus,'',contact||'','Necessidade ainda não confirmada.','Lead manual; verificar contato e serviços antes de enviar.',input.opening?.trim()||intro(name,focus),JSON.stringify(contact?[{type:'Contato informado',url:contact,use:'Verificar antes de abordar'}]:[]),now,now),db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(id,'Agência adicionada',null,'01 PESQUISADA',null,now)]);return bootstrap();
 }

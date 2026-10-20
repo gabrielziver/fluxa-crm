@@ -1,0 +1,3 @@
+.contact-editor{display:grid;gap:8px}
+.contact-editor input{border:1px solid #dce5ed;border-radius:8px;padding:10px;font-size:12px}
+.contact-editor button{justify-self:start}

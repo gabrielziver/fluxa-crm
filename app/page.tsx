@@ -1,44 +1,896 @@
 'use client';
 /* oxlint-disable typescript/no-explicit-any */
-import {useCallback,useEffect,useMemo,useState} from 'react';
-import {ArrowUpRight,CalendarClock,Check,CheckCircle2,ChevronRight,Clipboard,Copy,ExternalLink,FolderOpen,LayoutDashboard,Mail,MessageCircle,Plus,Search,Send,Sparkles,Target,Users,X} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ArrowUpRight,
+  CalendarClock,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Clipboard,
+  Copy,
+  ExternalLink,
+  FolderOpen,
+  LayoutDashboard,
+  Mail,
+  MessageCircle,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  Target,
+  Users,
+  X,
+} from 'lucide-react';
+import ResearchPanel from './ResearchPanel';
 
-type Lead=Record<string,any>;
-type Data={leads:Lead[];events:Lead[];notes:Lead[];metrics:Record<string,number|null>;stages:string[]};
-type Tab='fila'|'followups'|'guia';
-const CITIES=['Recife','Curitiba','São Paulo'] as const;
-const followupText=(name:string)=>`Oi, pessoal da ${name}! Passando para retomar minha mensagem sobre apoio pontual em criativos, landing pages ou automações. Existe alguma demanda em que um parceiro de execução possa ajudar vocês esta semana?`;
-const cleanStage=(stage:string)=>stage.replace(/^\d+\s/,'');
-const formatDate=(value?:string)=>value?new Date(value.length===10?`${value}T12:00:00`:value).toLocaleDateString('pt-BR'):'—';
-const money=(value:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(value||0);
-const safeSources=(value:string)=>{try{return JSON.parse(value||'[]') as {type:string;url:string;use:string}[]}catch{return []}};
+type Lead = Record<string, any>;
+type Data = {
+  leads: Lead[];
+  events: Lead[];
+  notes: Lead[];
+  metrics: Record<string, number | null>;
+  stages: string[];
+};
+type Tab = 'fila' | 'pesquisa' | 'followups' | 'guia';
+const CITIES = ['Recife · PE', 'Curitiba · PR', 'São Paulo · SP'];
+const followupText = (name: string) =>
+  `Oi, pessoal da ${name}! Passando para retomar minha mensagem sobre apoio pontual em criativos, landing pages ou automações. Existe alguma demanda em que um parceiro de execução possa ajudar vocês esta semana?`;
+const cleanStage = (stage: string) => stage.replace(/^\d+\s/, '');
+const formatDate = (value?: string) =>
+  value
+    ? new Date(
+        value.length === 10 ? `${value}T12:00:00` : value,
+      ).toLocaleDateString('pt-BR')
+    : '—';
+const money = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+    value || 0,
+  );
+const safeSources = (value: string) => {
+  try {
+    return JSON.parse(value || '[]') as {
+      type: string;
+      url: string;
+      use: string;
+    }[];
+  } catch {
+    return [];
+  }
+};
 
-export default function Page(){
-  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[tab,setTab]=useState<Tab>('fila'),[city,setCity]=useState<(typeof CITIES)[number]>('Recife'),[selectedId,setSelectedId]=useState<string|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState('A abordar'),[toast,setToast]=useState(''),[showAdd,setShowAdd]=useState(false),[draft,setDraft]=useState({name:'',city:'Recife',contact:'',email:'',focus:'',opportunity:'',opening:''}),[note,setNote]=useState(''),[followDate,setFollowDate]=useState(''),[saleValue,setSaleValue]=useState('');
-  const refresh=useCallback(async()=>{try{setError('');const response=await fetch('/api/crm',{cache:'no-store'});const json:any=await response.json();if(!response.ok)throw new Error(json.error||'Falha ao carregar.');setData(json)}catch(err){setError(err instanceof Error?err.message:'Falha ao carregar.')}},[]);
-  useEffect(()=>{refresh()},[refresh]);
-  const notify=(message:string)=>{setToast(message);setTimeout(()=>setToast(''),3000)};
-  const post=async(payload:Record<string,unknown>)=>{setBusy(true);try{const response=await fetch('/api/crm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const json:any=await response.json();if(!response.ok)throw new Error(json.error||'Falha ao salvar.');setData(json);notify('Atualizado com sucesso.');return true}catch(err){setError(err instanceof Error?err.message:'Falha ao salvar.');return false}finally{setBusy(false)}};
-  const copy=async(value:string,label='Copiado.')=>{try{await navigator.clipboard.writeText(value);notify(label)}catch{setError('Não foi possível copiar. Selecione o texto manualmente.')}};
-  const selected=data?.leads.find(l=>l.id===selectedId)||null;
-  const groups=useMemo(()=>{const all=data?.leads||[];const scoped=all.filter(l=>l.city===city);const today=new Date().toISOString().slice(0,10);return {'A abordar':scoped.filter(l=>['01 PESQUISADA','02 PRONTA'].includes(l.stage)),'Em conversa':scoped.filter(l=>['03 MENSAGEM ENVIADA','04 RESPONDEU','05 DEMANDA IDENTIFICADA','06 PROPOSTA ENVIADA'].includes(l.stage)),'Fechadas':scoped.filter(l=>l.stage==='07 FECHADA'),'Perdidas':scoped.filter(l=>l.stage==='08 PERDIDA'),'Todos':scoped,'Follow-ups':all.filter(l=>l.next_follow_up_at&&l.next_follow_up_at.slice(0,10)<=today&&!['07 FECHADA','08 PERDIDA'].includes(l.stage))}},[data,city]);
-  const visible=(groups[filter as keyof typeof groups]||groups.Todos).filter(l=>`${l.clinic} ${l.services} ${l.site_issue}`.toLowerCase().includes(query.toLowerCase()));
-  const due=groups['Follow-ups'].sort((a,b)=>a.next_follow_up_at.localeCompare(b.next_follow_up_at));
-  const add=async()=>{if(await post({type:'add_lead',...draft})){setShowAdd(false);if(CITIES.some(c=>c===draft.city))setCity(draft.city as (typeof CITIES)[number]);setDraft({name:'',city:'Recife',contact:'',email:'',focus:'',opportunity:'',opening:''});setFilter('Todos')}};
-  const action=async(lead:Lead,name:string,value?:number)=>{if(await post({id:lead.id,action:name,value})){if(name==='sale')setSaleValue('')}};
-  if(error&&!data)return <main className="loading"><h1>Não foi possível abrir o CRM</h1><p>{error}</p><button onClick={refresh}>Tentar novamente</button></main>;
-  if(!data)return <main className="loading"><Sparkles/><p>Preparando a operação de agências…</p></main>;
-  const m=data.metrics;
-  return <div className="shell">
-    <aside className="nav"><div className="brand"><span className="brand-icon"><Sparkles size={19}/></span><div><strong>Fluxa CRM</strong><small>Parcerias com agências</small></div></div><div className="nav-section">OPERAÇÃO</div><button className={tab==='fila'?'active':''} onClick={()=>setTab('fila')}><Target size={18}/>Prospecção<ChevronRight size={15}/></button><button className={tab==='followups'?'active':''} onClick={()=>setTab('followups')}><CalendarClock size={18}/>Follow-ups{due.length>0&&<b>{due.length}</b>}</button><button className={tab==='guia'?'active':''} onClick={()=>setTab('guia')}><Clipboard size={18}/>Oferta e scripts</button><div className="nav-bottom"><span>Estratégia atual</span><strong>Primeiro projeto pago, escopo fechado.</strong><p>Copie a mensagem, envie manualmente e registre o resultado.</p></div></aside>
-    <main className="main"><header className="top"><div><div className="eyebrow">OPERAÇÃO COMERCIAL · OUTUBRO 2026</div><h1>{tab==='fila'?'Agências para prospectar':tab==='followups'?'Conversas para retomar':'Oferta e abordagem'}</h1><p>{tab==='fila'?'Uma lista inicial para iniciar conversas reais — sem supor que exista demanda.':tab==='followups'?'Próximas ações organizadas por data.':'Um roteiro simples para transformar conversa em projeto.'}</p></div><div className="top-buttons"><span className="live"><i/> Dados salvos</span><button className="primary" onClick={()=>{setDraft(current=>({...current,city}));setShowAdd(true)}}><Plus size={17}/> Nova agência</button></div></header>
-      {toast&&<div className="toast"><Check size={16}/>{toast}</div>}{error&&<div className="error"><span>{error}</span><button onClick={()=>setError('')} aria-label="Fechar"><X size={16}/></button></div>}
-      <div className="kpis"><div><Users/><span>Agências</span><strong>{m.total}</strong></div><div><Send/><span>Prontas para contato</span><strong>{m.ready}</strong></div><div><MessageCircle/><span>Respostas</span><strong>{m.replies}</strong></div><div><Target/><span>Demandas</span><strong>{m.demands}</strong></div><div><CheckCircle2/><span>Projetos fechados</span><strong>{m.sales}</strong></div></div>
-      {tab==='fila'&&<><div className="city-batches"><div className="batch-heading"><strong>Lotes por cidade</strong><span>Meta: 50 agências por cidade · pesquisa pública, sem API paga</span></div><div className="city-options">{CITIES.map((name,index)=>{const count=data.leads.filter(l=>l.city===name).length;return <button key={name} className={city===name?'selected':''} onClick={()=>{setCity(name);setQuery('');setFilter('A abordar')}}><small>LOTE {String(index+1).padStart(2,'0')}</small><strong>{name}</strong><span>{count}/50 agências</span><i><em style={{width:`${Math.min(100,count*2)}%`}}/></i></button>})}</div><p>Começamos por Recife. “Pesquisada” significa que o site foi encontrado; confirme contato e localização antes de marcar como pronta. Curitiba e São Paulo ficam abertas para os próximos lotes.</p></div><div className="content-head"><div><h2>Fila de prospecção · {city}</h2><p>Priorize agências com serviços compatíveis. Confirme o canal e personalize antes de enviar.</p></div><div className="search"><Search size={18}/><input placeholder="Buscar agência ou serviço" value={query} onChange={e=>setQuery(e.target.value)}/></div></div><div className="filters">{['A abordar','Em conversa','Fechadas','Perdidas','Todos'].map(name=><button key={name} className={filter===name?'active':''} onClick={()=>setFilter(name)}>{name}<b>{groups[name as keyof typeof groups].length}</b></button>)}</div><div className="lead-grid">{visible.map(lead=><article className="agency-card" key={lead.id}><div className="card-top"><span className={`priority ${lead.score>=3?'high':''}`}>{lead.score>=3?'Prioridade alta':'Prioridade média'}</span><span className="stage">{cleanStage(lead.stage)}</span></div><h3>{lead.clinic}</h3><p className="focus">{lead.services}</p><div className="opportunity"><span>ONDE PODEMOS AJUDAR</span><strong>{lead.site_issue}</strong></div><div className="card-actions"><button className="outline" onClick={()=>setSelectedId(lead.id)}>Ver abordagem <ChevronRight size={16}/></button><button className="subtle" onClick={()=>copy(lead.specific_opening,'Mensagem copiada.')}>Copiar mensagem <Copy size={15}/></button></div></article>)}{!visible.length&&<div className="empty">Nenhuma agência neste filtro. Adicione uma agência ou escolha outra cidade.</div>}</div></>}
-      {tab==='followups'&&<div className="follow-layout"><div className="content-head"><div><h2>Follow-ups vencidos ou de hoje</h2><p>Retome apenas conversas que você realmente iniciou.</p></div></div>{due.length?due.map(lead=><article className="follow-card" key={lead.id}><div><small>{formatDate(lead.next_follow_up_at)} · {cleanStage(lead.stage)}</small><h3>{lead.clinic}</h3></div><div><button className="outline" onClick={()=>copy(followupText(lead.clinic),'Follow-up copiado.')}><Copy size={15}/> Copiar follow-up</button><button className="primary" onClick={()=>setSelectedId(lead.id)}>Abrir agência</button></div></article>):<div className="empty"><CalendarClock/><strong>Nenhum follow-up vencido.</strong><p>Ao marcar uma mensagem enviada, o CRM agenda um retorno em dois dias.</p></div>}</div>}
-      {tab==='guia'&&<div className="guide"><section className="guide-hero"><span>OFERTA DE ENTRADA</span><h2>Reforço de produção para agências</h2><p>Criativos, landing pages ou uma automação delimitada. Primeiro projeto pago, prazo e entregáveis definidos antes de começar. Não venda “faço qualquer coisa”.</p></section><div className="guide-grid"><section><span>01 · ABERTURA</span><h3>Descubra a demanda</h3><p>“Vi que vocês atuam com [serviço]. Posso apoiar a equipe em demandas pontuais. Há alguma entrega represada esta semana?”</p></section><section><span>02 · QUALIFICAÇÃO</span><h3>Entenda o trabalho</h3><p>Peça tipo de entrega, volume, prazo, referências, quem aprova e se o trabalho será white-label.</p></section><section><span>03 · PROPOSTA</span><h3>Feche o escopo</h3><p>Registre entregáveis, prazo, número de revisões, valor, forma de pagamento e o que fica fora.</p></section><section><span>04 · EXECUÇÃO</span><h3>Entregue e aprenda</h3><p>Comece pequeno. Depois da entrega, peça feedback e avalie uma parceria recorrente — sem prometer resultado não medido.</p></section></div><div className="guide-note"><LayoutDashboard size={20}/><p>Inspirado no vídeo: organizar contatos, follow-ups, histórico e escopo. Não ativamos prospecção automática nem integração não oficial com WhatsApp.</p></div></div>}
-    </main>
-    {selected&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setSelectedId(null)}}><aside className="drawer"><div className="drawer-head"><div><small>AGÊNCIA · {cleanStage(selected.stage)}</small><h2>{selected.clinic}</h2><p>{selected.location}</p></div><button aria-label="Fechar" onClick={()=>setSelectedId(null)}><X/></button></div><div className="drawer-body"><div className="detail-block"><span>POR QUE ENTRAR EM CONTATO</span><p>{selected.site_issue}</p><small>{selected.verification_notes}</small></div><div className="detail-block"><span>MENSAGEM PERSONALIZADA</span><blockquote>{selected.specific_opening}</blockquote><button className="primary" onClick={()=>copy(selected.specific_opening,'Mensagem copiada.')}><Copy size={16}/> Copiar mensagem</button></div><div className="contact-actions">{selected.whatsapp_url?.startsWith('https://')&&<a href={selected.whatsapp_url} target="_blank" rel="noreferrer"><ExternalLink size={17}/> Abrir canal público</a>}{selected.instagram&&<button onClick={()=>copy(selected.instagram,'E-mail copiado.')}><Mail size={17}/> {selected.instagram} <Copy size={14}/></button>}</div><p className="hint">Abrir o canal não significa que a mensagem foi enviada. Confirme abaixo só depois de enviar manualmente.</p><div className="detail-block"><span>PRÓXIMO PASSO</span><div className="action-grid">{selected.stage==='01 PESQUISADA'&&<button onClick={()=>action(selected,'ready')} disabled={busy}>Contato verificado</button>}{selected.stage==='02 PRONTA'&&<button onClick={()=>action(selected,'mark_sent')} disabled={busy}>Marcar mensagem enviada</button>}{selected.stage==='03 MENSAGEM ENVIADA'&&<button onClick={()=>action(selected,'mark_replied')} disabled={busy}>Marcar resposta</button>}{selected.stage==='04 RESPONDEU'&&<button onClick={()=>action(selected,'demand')} disabled={busy}>Demanda identificada</button>}{selected.stage==='05 DEMANDA IDENTIFICADA'&&<button onClick={()=>action(selected,'proposal')} disabled={busy}>Proposta enviada</button>}{selected.stage==='06 PROPOSTA ENVIADA'&&<div className="sale"><input type="number" min="1" placeholder="Valor fechado (R$)" value={saleValue} onChange={e=>setSaleValue(e.target.value)}/><button disabled={busy||!Number(saleValue)} onClick={()=>action(selected,'sale',Number(saleValue))}>Fechar projeto</button></div>}{!['07 FECHADA','08 PERDIDA'].includes(selected.stage)&&<button className="danger" onClick={()=>action(selected,'lost')} disabled={busy}>Marcar perdida</button>}</div><div className="schedule"><label>Agendar próximo contato<input type="date" value={followDate||selected.next_follow_up_at?.slice(0,10)||''} onChange={e=>setFollowDate(e.target.value)}/></label><button className="outline" disabled={busy||!(followDate||selected.next_follow_up_at)} onClick={async()=>{if(await post({id:selected.id,action:'schedule_followup',followUpAt:followDate||selected.next_follow_up_at?.slice(0,10)}))setFollowDate('')}}>Salvar data</button></div>{selected.next_follow_up_at&&<small>Próximo contato: {formatDate(selected.next_follow_up_at)}</small>}</div><div className="detail-block"><span>NOTAS E HISTÓRICO</span><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="O que foi conversado? Qual é a próxima ação?"/><button className="outline" disabled={!note.trim()||busy} onClick={async()=>{if(await post({type:'note',id:selected.id,body:note}))setNote('')}}>Salvar nota</button><div className="timeline">{[...data.events.filter(e=>e.lead_id===selected.id).map(e=>({at:e.created_at,text:e.event_type})),...data.notes.filter(n=>n.lead_id===selected.id).map(n=>({at:n.created_at,text:n.body}))].sort((a,b)=>b.at.localeCompare(a.at)).map((item,i)=><p key={i}><small>{formatDate(item.at)}</small>{item.text}</p>)}</div></div><div className="detail-block"><span>FONTES PÚBLICAS</span>{safeSources(selected.sources_json).map((source,i)=><a className="source" href={source.url} target="_blank" rel="noreferrer" key={i}>{source.type}<ArrowUpRight size={15}/></a>)}</div></div></aside></div>}
-    {showAdd&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setShowAdd(false)}}><aside className="drawer add-drawer"><div className="drawer-head"><div><small>NOVO CONTATO</small><h2>Adicionar agência</h2></div><button aria-label="Fechar" onClick={()=>setShowAdd(false)}><X/></button></div><div className="drawer-body add-form"><p>O lead entra como “Pesquisada”. Verifique os dados antes da abordagem.</p>{([['name','Nome da agência *'],['city','Cidade'],['contact','Link público de contato (https://)'],['email','E-mail público'],['focus','Serviços da agência'],['opportunity','Onde podemos ajudar']] as const).map(([key,label])=><label key={key}>{label}<input value={draft[key]} onChange={e=>setDraft({...draft,[key]:e.target.value})}/></label>)}<label>Mensagem inicial<textarea value={draft.opening} onChange={e=>setDraft({...draft,opening:e.target.value})} placeholder="Se deixar vazio, geramos uma abertura básica."/></label><button className="primary" disabled={busy||!draft.name||(!draft.contact&&!draft.email)} onClick={add}><Plus size={16}/> Adicionar à fila</button></div></aside></div>}
-  </div>;
+export default function Page() {
+  const [data, setData] = useState<Data | null>(null),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false),
+    [tab, setTab] = useState<Tab>('fila'),
+    [city, setCity] = useState('Recife · PE'),
+    [selectedId, setSelectedId] = useState<string | null>(null),
+    [query, setQuery] = useState(''),
+    [filter, setFilter] = useState('A abordar'),
+    [toast, setToast] = useState(''),
+    [showAdd, setShowAdd] = useState(false),
+    [draft, setDraft] = useState({
+      name: '',
+      city: 'Recife',
+      state: 'PE',
+      contact: '',
+      email: '',
+      focus: '',
+      opportunity: '',
+      opening: '',
+    }),
+    [note, setNote] = useState(''),
+    [followDate, setFollowDate] = useState(''),
+    [saleValue, setSaleValue] = useState(''),
+    [contactDraft, setContactDraft] = useState({contact:'',email:'',phone:''});
+  useEffect(()=>{const lead=data?.leads.find((item)=>item.id===selectedId);if(lead)setContactDraft({contact:lead.whatsapp_url||'',email:lead.instagram||'',phone:lead.phone||''})},[data,selectedId]);
+  const refresh = useCallback(async () => {
+    try {
+      setError('');
+      const response = await fetch('/api/crm', { cache: 'no-store' });
+      const json: any = await response.json();
+      if (!response.ok) throw new Error(json.error || 'Falha ao carregar.');
+      setData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar.');
+    }
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+  const notify = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(''), 3000);
+  };
+  const post = async (payload: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/crm', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json: any = await response.json();
+      if (!response.ok) throw new Error(json.error || 'Falha ao salvar.');
+      setData(json);
+      notify('Atualizado com sucesso.');
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao salvar.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const copy = async (value: string, label = 'Copiado.') => {
+    try {
+      await navigator.clipboard.writeText(value);
+      notify(label);
+    } catch {
+      setError('Não foi possível copiar. Selecione o texto manualmente.');
+    }
+  };
+  const selected = data?.leads.find((l) => l.id === selectedId) || null;
+  const groups = useMemo(() => {
+    const all = data?.leads || [];
+    const scoped = all.filter((l) => l.location === city);
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      'A abordar': scoped.filter((l) =>
+        ['01 PESQUISADA', '02 PRONTA'].includes(l.stage),
+      ),
+      'Em conversa': scoped.filter((l) =>
+        [
+          '03 MENSAGEM ENVIADA',
+          '04 RESPONDEU',
+          '05 DEMANDA IDENTIFICADA',
+          '06 PROPOSTA ENVIADA',
+        ].includes(l.stage),
+      ),
+      Fechadas: scoped.filter((l) => l.stage === '07 FECHADA'),
+      Perdidas: scoped.filter((l) => l.stage === '08 PERDIDA'),
+      Todos: scoped,
+      'Follow-ups': all.filter(
+        (l) =>
+          l.next_follow_up_at &&
+          l.next_follow_up_at.slice(0, 10) <= today &&
+          !['07 FECHADA', '08 PERDIDA'].includes(l.stage),
+      ),
+    };
+  }, [data, city]);
+  const visible = (
+    groups[filter as keyof typeof groups] || groups.Todos
+  ).filter((l) =>
+    `${l.clinic} ${l.services} ${l.site_issue}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
+  );
+  const due = groups['Follow-ups'].sort((a, b) =>
+    a.next_follow_up_at.localeCompare(b.next_follow_up_at),
+  );
+  const add = async () => {
+    if (await post({ type: 'add_lead', ...draft })) {
+      setShowAdd(false);
+      setCity(`${draft.city.trim()} · ${draft.state.trim().toUpperCase()}`);
+      setDraft({
+        name: '',
+        city: 'Recife',
+        state: 'PE',
+        contact: '',
+        email: '',
+        focus: '',
+        opportunity: '',
+        opening: '',
+      });
+      setFilter('Todos');
+    }
+  };
+  const cityBatches = [
+    ...new Set([
+      ...CITIES,
+      ...(data?.leads || []).map((l) => String(l.location)),
+    ]),
+  ];
+  const action = async (lead: Lead, name: string, value?: number) => {
+    if (await post({ id: lead.id, action: name, value })) {
+      if (name === 'sale') setSaleValue('');
+    }
+  };
+  if (error && !data)
+    return (
+      <main className="loading">
+        <h1>Não foi possível abrir o CRM</h1>
+        <p>{error}</p>
+        <button onClick={refresh}>Tentar novamente</button>
+      </main>
+    );
+  if (!data)
+    return (
+      <main className="loading">
+        <Sparkles />
+        <p>Preparando a operação de agências…</p>
+      </main>
+    );
+  const m = data.metrics;
+  return (
+    <div className="shell">
+      <aside className="nav">
+        <div className="brand">
+          <span className="brand-icon">
+            <Sparkles size={19} />
+          </span>
+          <div>
+            <strong>Fluxa CRM</strong>
+            <small>Parcerias com agências</small>
+          </div>
+        </div>
+        <div className="nav-section">OPERAÇÃO</div>
+        <button
+          className={tab === 'fila' ? 'active' : ''}
+          onClick={() => setTab('fila')}
+        >
+          <Target size={18} />
+          Prospecção
+          <ChevronRight size={15} />
+        </button>
+        <button
+          className={tab === 'pesquisa' ? 'active' : ''}
+          onClick={() => setTab('pesquisa')}
+        >
+          <Search size={18} />
+          Pesquisar agências
+        </button>
+        <button
+          className={tab === 'followups' ? 'active' : ''}
+          onClick={() => setTab('followups')}
+        >
+          <CalendarClock size={18} />
+          Follow-ups{due.length > 0 && <b>{due.length}</b>}
+        </button>
+        <button
+          className={tab === 'guia' ? 'active' : ''}
+          onClick={() => setTab('guia')}
+        >
+          <Clipboard size={18} />
+          Oferta e scripts
+        </button>
+        <div className="nav-bottom">
+          <span>Estratégia atual</span>
+          <strong>Primeiro projeto pago, escopo fechado.</strong>
+          <p>Copie a mensagem, envie manualmente e registre o resultado.</p>
+        </div>
+      </aside>
+      <main className="main">
+        <header className="top">
+          <div>
+            <div className="eyebrow">OPERAÇÃO COMERCIAL · OUTUBRO 2026</div>
+            <h1>
+              {tab === 'fila'
+                ? 'Agências para prospectar'
+                : tab === 'pesquisa'
+                  ? 'Pesquisa de agências'
+                  : tab === 'followups'
+                    ? 'Conversas para retomar'
+                    : 'Oferta e abordagem'}
+            </h1>
+            <p>
+              {tab === 'fila'
+                ? 'Uma lista inicial para iniciar conversas reais — sem supor que exista demanda.'
+                : tab === 'pesquisa'
+                  ? 'Monte novos lotes por região sem precisar pedir uma lista no chat.'
+                  : tab === 'followups'
+                    ? 'Próximas ações organizadas por data.'
+                    : 'Um roteiro simples para transformar conversa em projeto.'}
+            </p>
+          </div>
+          <div className="top-buttons">
+            <span className="live">
+              <i /> Dados salvos
+            </span>
+            <button
+              className="primary"
+              onClick={() => {
+                const [selectedCity, selectedState] = city.split(' · ');
+                setDraft((current) => ({
+                  ...current,
+                  city: selectedCity,
+                  state: selectedState || 'PE',
+                }));
+                setShowAdd(true);
+              }}
+            >
+              <Plus size={17} /> Nova agência
+            </button>
+          </div>
+        </header>
+        {toast && (
+          <div className="toast">
+            <Check size={16} />
+            {toast}
+          </div>
+        )}
+        {error && (
+          <div className="error">
+            <span>{error}</span>
+            <button onClick={() => setError('')} aria-label="Fechar">
+              <X size={16} />
+            </button>
+          </div>
+        )}
+        <div className="kpis">
+          <div>
+            <Users />
+            <span>Agências</span>
+            <strong>{m.total}</strong>
+          </div>
+          <div>
+            <Send />
+            <span>Prontas para contato</span>
+            <strong>{m.ready}</strong>
+          </div>
+          <div>
+            <MessageCircle />
+            <span>Respostas</span>
+            <strong>{m.replies}</strong>
+          </div>
+          <div>
+            <Target />
+            <span>Demandas</span>
+            <strong>{m.demands}</strong>
+          </div>
+          <div>
+            <CheckCircle2 />
+            <span>Projetos fechados</span>
+            <strong>{m.sales}</strong>
+          </div>
+        </div>
+        {tab === 'fila' && (
+          <>
+            <div className="city-batches">
+              <div className="batch-heading">
+                <strong>Lotes por cidade</strong>
+                <span>Pesquise e importe novos contatos sem API paga</span>
+              </div>
+              <div className="city-options">
+                {cityBatches.map((name, index) => {
+                  const count = data.leads.filter(
+                    (l) => l.location === name,
+                  ).length;
+                  return (
+                    <button
+                      key={name}
+                      className={city === name ? 'selected' : ''}
+                      onClick={() => {
+                        setCity(name);
+                        setQuery('');
+                        setFilter('A abordar');
+                      }}
+                    >
+                      <small>LOTE {String(index + 1).padStart(2, '0')}</small>
+                      <strong>{name}</strong>
+                      <span>
+                        {count} agência{count === 1 ? '' : 's'}
+                      </span>
+                      <i>
+                        <em style={{ width: `${Math.min(100, count * 2)}%` }} />
+                      </i>
+                    </button>
+                  );
+                })}
+              </div>
+              <p>
+                “Pesquisada” indica um candidato ainda não conferido. Confirme
+                agência, localização e contato antes de marcar como pronta.{' '}
+                <button
+                  className="inline-research"
+                  onClick={() => setTab('pesquisa')}
+                >
+                  Pesquisar outra região →
+                </button>
+              </p>
+            </div>
+            <div className="content-head">
+              <div>
+                <h2>Fila de prospecção · {city}</h2>
+                <p>
+                  Priorize agências com serviços compatíveis. Confirme o canal e
+                  personalize antes de enviar.
+                </p>
+              </div>
+              <div className="search">
+                <Search size={18} />
+                <input
+                  placeholder="Buscar agência ou serviço"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="filters">
+              {[
+                'A abordar',
+                'Em conversa',
+                'Fechadas',
+                'Perdidas',
+                'Todos',
+              ].map((name) => (
+                <button
+                  key={name}
+                  className={filter === name ? 'active' : ''}
+                  onClick={() => setFilter(name)}
+                >
+                  {name}
+                  <b>{groups[name as keyof typeof groups].length}</b>
+                </button>
+              ))}
+            </div>
+            <div className="lead-grid">
+              {visible.map((lead) => (
+                <article className="agency-card" key={lead.id}>
+                  <div className="card-top">
+                    <span
+                      className={`priority ${lead.score >= 3 ? 'high' : ''}`}
+                    >
+                      {lead.score >= 3 ? 'Prioridade alta' : 'Prioridade média'}
+                    </span>
+                    <span className="stage">{cleanStage(lead.stage)}</span>
+                  </div>
+                  <h3>{lead.clinic}</h3>
+                  <p className="focus">{lead.services}</p>
+                  <div className="opportunity">
+                    <span>ONDE PODEMOS AJUDAR</span>
+                    <strong>{lead.site_issue}</strong>
+                  </div>
+                  <div className="card-actions">
+                    <button
+                      className="outline"
+                      onClick={() => setSelectedId(lead.id)}
+                    >
+                      Ver abordagem <ChevronRight size={16} />
+                    </button>
+                    <button
+                      className="subtle"
+                      onClick={() =>
+                        copy(lead.specific_opening, 'Mensagem copiada.')
+                      }
+                    >
+                      Copiar mensagem <Copy size={15} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {!visible.length && (
+                <div className="empty">
+                  Nenhuma agência neste filtro. Pesquise ou adicione contatos
+                  nesta região.
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {tab === 'pesquisa' && (
+          <ResearchPanel
+            onImported={(next, location) => {
+              setData(next as Data);
+              setCity(location);
+              setQuery('');
+              setFilter('A abordar');
+              setTab('fila');
+              notify('Agências importadas para a fila de prospecção.');
+            }}
+          />
+        )}
+        {tab === 'followups' && (
+          <div className="follow-layout">
+            <div className="content-head">
+              <div>
+                <h2>Follow-ups vencidos ou de hoje</h2>
+                <p>Retome apenas conversas que você realmente iniciou.</p>
+              </div>
+            </div>
+            {due.length ? (
+              due.map((lead) => (
+                <article className="follow-card" key={lead.id}>
+                  <div>
+                    <small>
+                      {formatDate(lead.next_follow_up_at)} ·{' '}
+                      {cleanStage(lead.stage)}
+                    </small>
+                    <h3>{lead.clinic}</h3>
+                  </div>
+                  <div>
+                    <button
+                      className="outline"
+                      onClick={() =>
+                        copy(followupText(lead.clinic), 'Follow-up copiado.')
+                      }
+                    >
+                      <Copy size={15} /> Copiar follow-up
+                    </button>
+                    <button
+                      className="primary"
+                      onClick={() => setSelectedId(lead.id)}
+                    >
+                      Abrir agência
+                    </button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="empty">
+                <CalendarClock />
+                <strong>Nenhum follow-up vencido.</strong>
+                <p>
+                  Ao marcar uma mensagem enviada, o CRM agenda um retorno em
+                  dois dias.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+        {tab === 'guia' && (
+          <div className="guide">
+            <section className="guide-hero">
+              <span>OFERTA DE ENTRADA</span>
+              <h2>Reforço de produção para agências</h2>
+              <p>
+                Criativos, landing pages ou uma automação delimitada. Primeiro
+                projeto pago, prazo e entregáveis definidos antes de começar.
+                Não venda “faço qualquer coisa”.
+              </p>
+            </section>
+            <div className="guide-grid">
+              <section>
+                <span>01 · ABERTURA</span>
+                <h3>Descubra a demanda</h3>
+                <p>
+                  “Vi que vocês atuam com [serviço]. Posso apoiar a equipe em
+                  demandas pontuais. Há alguma entrega represada esta semana?”
+                </p>
+              </section>
+              <section>
+                <span>02 · QUALIFICAÇÃO</span>
+                <h3>Entenda o trabalho</h3>
+                <p>
+                  Peça tipo de entrega, volume, prazo, referências, quem aprova
+                  e se o trabalho será white-label.
+                </p>
+              </section>
+              <section>
+                <span>03 · PROPOSTA</span>
+                <h3>Feche o escopo</h3>
+                <p>
+                  Registre entregáveis, prazo, número de revisões, valor, forma
+                  de pagamento e o que fica fora.
+                </p>
+              </section>
+              <section>
+                <span>04 · EXECUÇÃO</span>
+                <h3>Entregue e aprenda</h3>
+                <p>
+                  Comece pequeno. Depois da entrega, peça feedback e avalie uma
+                  parceria recorrente — sem prometer resultado não medido.
+                </p>
+              </section>
+            </div>
+            <div className="guide-note">
+              <LayoutDashboard size={20} />
+              <p>
+                Inspirado no vídeo: organizar contatos, follow-ups, histórico e
+                escopo. Não ativamos prospecção automática nem integração não
+                oficial com WhatsApp.
+              </p>
+            </div>
+          </div>
+        )}
+      </main>
+      {selected && (
+        <div
+          className="overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSelectedId(null);
+          }}
+        >
+          <aside className="drawer">
+            <div className="drawer-head">
+              <div>
+                <small>AGÊNCIA · {cleanStage(selected.stage)}</small>
+                <h2>{selected.clinic}</h2>
+                <p>{selected.location}</p>
+              </div>
+              <button aria-label="Fechar" onClick={() => setSelectedId(null)}>
+                <X />
+              </button>
+            </div>
+            <div className="drawer-body">
+              <div className="detail-block">
+                <span>POR QUE ENTRAR EM CONTATO</span>
+                <p>{selected.site_issue}</p>
+                <small>{selected.verification_notes}</small>
+              </div>
+              <div className="detail-block">
+                <span>MENSAGEM PERSONALIZADA</span>
+                <blockquote>{selected.specific_opening}</blockquote>
+                <button
+                  className="primary"
+                  onClick={() =>
+                    copy(selected.specific_opening, 'Mensagem copiada.')
+                  }
+                >
+                  <Copy size={16} /> Copiar mensagem
+                </button>
+              </div>
+              <div className="contact-actions">
+                {selected.whatsapp_url?.startsWith('https://') && (
+                  <a
+                    href={selected.whatsapp_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink size={17} /> Abrir canal público
+                  </a>
+                )}
+                {selected.instagram && (
+                  <button
+                    onClick={() => copy(selected.instagram, 'E-mail copiado.')}
+                  >
+                    <Mail size={17} /> {selected.instagram} <Copy size={14} />
+                  </button>
+                )}
+                {selected.phone && (
+                  <button onClick={() => copy(selected.phone, 'Telefone copiado.')}>
+                    <Copy size={16} /> {selected.phone}
+                  </button>
+                )}
+              </div>
+              {selected.stage === '01 PESQUISADA' && (
+                <div className="detail-block contact-editor">
+                  <span>CONFIRMAR OU CORRIGIR CONTATO</span>
+                  <input placeholder="Site ou link público (https://)" value={contactDraft.contact} onChange={e=>setContactDraft({...contactDraft,contact:e.target.value})}/>
+                  <input placeholder="E-mail público" value={contactDraft.email} onChange={e=>setContactDraft({...contactDraft,email:e.target.value})}/>
+                  <input placeholder="Telefone público" value={contactDraft.phone} onChange={e=>setContactDraft({...contactDraft,phone:e.target.value})}/>
+                  <button className="outline" disabled={busy} onClick={()=>post({id:selected.id,action:'update_contact',...contactDraft})}>Salvar contato</button>
+                </div>
+              )}
+              <p className="hint">
+                Abrir o canal não significa que a mensagem foi enviada. Confirme
+                abaixo só depois de enviar manualmente.
+              </p>
+              <div className="detail-block">
+                <span>PRÓXIMO PASSO</span>
+                <div className="action-grid">
+                  {selected.stage === '01 PESQUISADA' && (
+                    <button
+                      onClick={() => action(selected, 'ready')}
+                      disabled={busy}
+                    >
+                      Contato verificado
+                    </button>
+                  )}
+                  {selected.stage === '02 PRONTA' && (
+                    <button
+                      onClick={() => action(selected, 'mark_sent')}
+                      disabled={busy}
+                    >
+                      Marcar mensagem enviada
+                    </button>
+                  )}
+                  {selected.stage === '03 MENSAGEM ENVIADA' && (
+                    <button
+                      onClick={() => action(selected, 'mark_replied')}
+                      disabled={busy}
+                    >
+                      Marcar resposta
+                    </button>
+                  )}
+                  {selected.stage === '04 RESPONDEU' && (
+                    <button
+                      onClick={() => action(selected, 'demand')}
+                      disabled={busy}
+                    >
+                      Demanda identificada
+                    </button>
+                  )}
+                  {selected.stage === '05 DEMANDA IDENTIFICADA' && (
+                    <button
+                      onClick={() => action(selected, 'proposal')}
+                      disabled={busy}
+                    >
+                      Proposta enviada
+                    </button>
+                  )}
+                  {selected.stage === '06 PROPOSTA ENVIADA' && (
+                    <div className="sale">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Valor fechado (R$)"
+                        value={saleValue}
+                        onChange={(e) => setSaleValue(e.target.value)}
+                      />
+                      <button
+                        disabled={busy || !Number(saleValue)}
+                        onClick={() =>
+                          action(selected, 'sale', Number(saleValue))
+                        }
+                      >
+                        Fechar projeto
+                      </button>
+                    </div>
+                  )}
+                  {!['07 FECHADA', '08 PERDIDA'].includes(selected.stage) && (
+                    <button
+                      className="danger"
+                      onClick={() => action(selected, 'lost')}
+                      disabled={busy}
+                    >
+                      Marcar perdida
+                    </button>
+                  )}
+                </div>
+                <div className="schedule">
+                  <label>
+                    Agendar próximo contato
+                    <input
+                      type="date"
+                      value={
+                        followDate ||
+                        selected.next_follow_up_at?.slice(0, 10) ||
+                        ''
+                      }
+                      onChange={(e) => setFollowDate(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="outline"
+                    disabled={
+                      busy || !(followDate || selected.next_follow_up_at)
+                    }
+                    onClick={async () => {
+                      if (
+                        await post({
+                          id: selected.id,
+                          action: 'schedule_followup',
+                          followUpAt:
+                            followDate ||
+                            selected.next_follow_up_at?.slice(0, 10),
+                        })
+                      )
+                        setFollowDate('');
+                    }}
+                  >
+                    Salvar data
+                  </button>
+                </div>
+                {selected.next_follow_up_at && (
+                  <small>
+                    Próximo contato: {formatDate(selected.next_follow_up_at)}
+                  </small>
+                )}
+              </div>
+              <div className="detail-block">
+                <span>NOTAS E HISTÓRICO</span>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="O que foi conversado? Qual é a próxima ação?"
+                />
+                <button
+                  className="outline"
+                  disabled={!note.trim() || busy}
+                  onClick={async () => {
+                    if (
+                      await post({ type: 'note', id: selected.id, body: note })
+                    )
+                      setNote('');
+                  }}
+                >
+                  Salvar nota
+                </button>
+                <div className="timeline">
+                  {[
+                    ...data.events
+                      .filter((e) => e.lead_id === selected.id)
+                      .map((e) => ({ at: e.created_at, text: e.event_type })),
+                    ...data.notes
+                      .filter((n) => n.lead_id === selected.id)
+                      .map((n) => ({ at: n.created_at, text: n.body })),
+                  ]
+                    .sort((a, b) => b.at.localeCompare(a.at))
+                    .map((item, i) => (
+                      <p key={i}>
+                        <small>{formatDate(item.at)}</small>
+                        {item.text}
+                      </p>
+                    ))}
+                </div>
+              </div>
+              <div className="detail-block">
+                <span>FONTES PÚBLICAS</span>
+                {safeSources(selected.sources_json).map((source, i) => (
+                  <a
+                    className="source"
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    key={i}
+                  >
+                    {source.type}
+                    <ArrowUpRight size={15} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+      {showAdd && (
+        <div
+          className="overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowAdd(false);
+          }}
+        >
+          <aside className="drawer add-drawer">
+            <div className="drawer-head">
+              <div>
+                <small>NOVO CONTATO</small>
+                <h2>Adicionar agência</h2>
+              </div>
+              <button aria-label="Fechar" onClick={() => setShowAdd(false)}>
+                <X />
+              </button>
+            </div>
+            <div className="drawer-body add-form">
+              <p>
+                O lead entra como “Pesquisada”. Verifique os dados antes da
+                abordagem.
+              </p>
+              {(
+                [
+                  ['name', 'Nome da agência *'],
+                  ['city', 'Cidade'],
+                  ['state', 'UF'],
+                  ['contact', 'Link público de contato (https://)'],
+                  ['email', 'E-mail público'],
+                  ['focus', 'Serviços da agência'],
+                  ['opportunity', 'Onde podemos ajudar'],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key}>
+                  {label}
+                  <input
+                    value={draft[key]}
+                    onChange={(e) =>
+                      setDraft({ ...draft, [key]: e.target.value })
+                    }
+                  />
+                </label>
+              ))}
+              <label>
+                Mensagem inicial
+                <textarea
+                  value={draft.opening}
+                  onChange={(e) =>
+                    setDraft({ ...draft, opening: e.target.value })
+                  }
+                  placeholder="Se deixar vazio, geramos uma abertura básica."
+                />
+              </label>
+              <button
+                className="primary"
+                disabled={
+                  busy || !draft.name || (!draft.contact && !draft.email)
+                }
+                onClick={add}
+              >
+                <Plus size={16} /> Adicionar à fila
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+    </div>
+  );
 }
