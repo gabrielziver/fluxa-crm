@@ -1,5 +1,6 @@
 import { getD1 } from '@/db';
 import { bootstrap } from '@/lib/crm';
+import { initialMessage } from '@/lib/outreach';
 
 const STATES: Record<string, string> = {
   AC: 'Acre',
@@ -261,7 +262,7 @@ export async function importAgencies(input: {
     const email = safeText(item.email, 120);
     const phone = safeText(item.phone, 50);
     const focus = 'comunicação, marketing ou design (confirmar serviços)';
-    const opening = `Oi, pessoal da ${name}! Sou designer e desenvolvedor e posso apoiar a equipe em demandas pontuais, como criativos, landing pages e automações. Vocês precisam de reforço em alguma entrega esta semana? Se fizer sentido, envio exemplos e combinamos um primeiro projeto de escopo fechado.`;
+    const opening = initialMessage(city);
     inserts.push(
       db
         .prepare(
@@ -356,7 +357,7 @@ export async function importPastedAgencies(input: {
     const phone = safeText(row.phone, 50);
     if (row.contact && !contact)
       throw new Error(`Link inválido para ${name}. Use https://.`);
-    const opening = `Oi, pessoal da ${name}! Sou designer e desenvolvedor e posso apoiar a equipe em demandas pontuais, como criativos, landing pages e automações. Vocês têm alguma entrega em que precisem de reforço esta semana?`;
+    const opening = initialMessage(city);
     inserts.push(
       db
         .prepare(

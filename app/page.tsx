@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import ResearchPanel from './ResearchPanel';
+import { initialMessage, replyMessage, whatsappLink } from '@/lib/outreach';
 
 type Lead = Record<string, any>;
 type Data = {
@@ -34,6 +35,12 @@ type Data = {
 };
 type Tab = 'fila' | 'pesquisa' | 'followups' | 'guia';
 const CITIES = ['Recife · PE', 'Curitiba · PR', 'São Paulo · SP'];
+const firstMessage = (lead: Lead) =>
+  lead.id?.startsWith('agency-manual-') &&
+  lead.specific_opening &&
+  !lead.specific_opening.startsWith('Oi, pessoal da ')
+    ? lead.specific_opening
+    : initialMessage(lead.city);
 const followupText = (name: string) =>
   `Oi, pessoal da ${name}! Passando para retomar minha mensagem sobre apoio pontual em criativos, landing pages ou automações. Existe alguma demanda em que um parceiro de execução possa ajudar vocês esta semana?`;
 const cleanStage = (stage: string) => stage.replace(/^\d+\s/, '');
@@ -83,8 +90,20 @@ export default function Page() {
     [note, setNote] = useState(''),
     [followDate, setFollowDate] = useState(''),
     [saleValue, setSaleValue] = useState(''),
-    [contactDraft, setContactDraft] = useState({contact:'',email:'',phone:''});
-  useEffect(()=>{const lead=data?.leads.find((item)=>item.id===selectedId);if(lead)setContactDraft({contact:lead.whatsapp_url||'',email:lead.instagram||'',phone:lead.phone||''})},[data,selectedId]);
+    [contactDraft, setContactDraft] = useState({
+      contact: '',
+      email: '',
+      phone: '',
+    });
+  useEffect(() => {
+    const lead = data?.leads.find((item) => item.id === selectedId);
+    if (lead)
+      setContactDraft({
+        contact: lead.whatsapp_url || '',
+        email: lead.instagram || '',
+        phone: lead.phone || '',
+      });
+  }, [data, selectedId]);
   const refresh = useCallback(async () => {
     try {
       setError('');
@@ -443,6 +462,16 @@ export default function Page() {
                     <strong>{lead.site_issue}</strong>
                   </div>
                   <div className="card-actions">
+                    {whatsappLink(lead.phone) && (
+                      <a
+                        className="whatsapp-card-link"
+                        href={whatsappLink(lead.phone)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <MessageCircle size={16} /> WhatsApp
+                      </a>
+                    )}
                     <button
                       className="outline"
                       onClick={() => setSelectedId(lead.id)}
@@ -452,7 +481,7 @@ export default function Page() {
                     <button
                       className="subtle"
                       onClick={() =>
-                        copy(lead.specific_opening, 'Mensagem copiada.')
+                        copy(firstMessage(lead), 'Mensagem copiada.')
                       }
                     >
                       Copiar mensagem <Copy size={15} />
@@ -610,18 +639,51 @@ export default function Page() {
                 <small>{selected.verification_notes}</small>
               </div>
               <div className="detail-block">
-                <span>MENSAGEM PERSONALIZADA</span>
-                <blockquote>{selected.specific_opening}</blockquote>
+                <span>1. PRIMEIRA MENSAGEM</span>
+                <blockquote>{firstMessage(selected)}</blockquote>
                 <button
                   className="primary"
                   onClick={() =>
-                    copy(selected.specific_opening, 'Mensagem copiada.')
+                    copy(firstMessage(selected), 'Primeira mensagem copiada.')
                   }
                 >
-                  <Copy size={16} /> Copiar mensagem
+                  <Copy size={16} /> Copiar primeira mensagem
+                </button>
+              </div>
+              <div className="detail-block">
+                <span>2. SE RESPONDEREM, APRESENTE O APOIO</span>
+                <blockquote style={{ whiteSpace: 'pre-line' }}>
+                  {replyMessage}
+                </blockquote>
+                <button
+                  className="outline"
+                  onClick={() => copy(replyMessage, 'Resposta copiada.')}
+                >
+                  <Copy size={16} /> Copiar resposta
                 </button>
               </div>
               <div className="contact-actions">
+                {whatsappLink(selected.phone) && (
+                  <>
+                    <a
+                      href={whatsappLink(selected.phone)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <MessageCircle size={17} /> Abrir WhatsApp
+                    </a>
+                    <button
+                      onClick={() =>
+                        copy(
+                          whatsappLink(selected.phone),
+                          'Link do WhatsApp copiado.',
+                        )
+                      }
+                    >
+                      <Copy size={16} /> {whatsappLink(selected.phone)}
+                    </button>
+                  </>
+                )}
                 {selected.whatsapp_url?.startsWith('https://') && (
                   <a
                     href={selected.whatsapp_url}
@@ -639,20 +701,68 @@ export default function Page() {
                   </button>
                 )}
                 {selected.phone && (
-                  <button onClick={() => copy(selected.phone, 'Telefone copiado.')}>
+                  <button
+                    onClick={() => copy(selected.phone, 'Telefone copiado.')}
+                  >
                     <Copy size={16} /> {selected.phone}
                   </button>
                 )}
               </div>
-              {selected.stage === '01 PESQUISADA' && (
-                <div className="detail-block contact-editor">
-                  <span>CONFIRMAR OU CORRIGIR CONTATO</span>
-                  <input placeholder="Site ou link público (https://)" value={contactDraft.contact} onChange={e=>setContactDraft({...contactDraft,contact:e.target.value})}/>
-                  <input placeholder="E-mail público" value={contactDraft.email} onChange={e=>setContactDraft({...contactDraft,email:e.target.value})}/>
-                  <input placeholder="Telefone público" value={contactDraft.phone} onChange={e=>setContactDraft({...contactDraft,phone:e.target.value})}/>
-                  <button className="outline" disabled={busy} onClick={()=>post({id:selected.id,action:'update_contact',...contactDraft})}>Salvar contato</button>
-                </div>
+              {!whatsappLink(selected.phone) && (
+                <p className="hint">
+                  Sem link direto: adicione abaixo um celular público com DDD
+                  para gerar o wa.me.
+                </p>
               )}
+              {selected.stage !== '07 FECHADA' &&
+                selected.stage !== '08 PERDIDA' && (
+                  <div className="detail-block contact-editor">
+                    <span>CONFIRMAR OU CORRIGIR CONTATO</span>
+                    <input
+                      placeholder="Site ou link público (https://)"
+                      value={contactDraft.contact}
+                      onChange={(e) =>
+                        setContactDraft({
+                          ...contactDraft,
+                          contact: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="E-mail público"
+                      value={contactDraft.email}
+                      onChange={(e) =>
+                        setContactDraft({
+                          ...contactDraft,
+                          email: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Celular público com DDD (gera wa.me)"
+                      value={contactDraft.phone}
+                      onChange={(e) =>
+                        setContactDraft({
+                          ...contactDraft,
+                          phone: e.target.value,
+                        })
+                      }
+                    />
+                    <button
+                      className="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        post({
+                          id: selected.id,
+                          action: 'update_contact',
+                          ...contactDraft,
+                        })
+                      }
+                    >
+                      Salvar contato
+                    </button>
+                  </div>
+                )}
               <p className="hint">
                 Abrir o canal não significa que a mensagem foi enviada. Confirme
                 abaixo só depois de enviar manualmente.
@@ -875,7 +985,7 @@ export default function Page() {
                   onChange={(e) =>
                     setDraft({ ...draft, opening: e.target.value })
                   }
-                  placeholder="Se deixar vazio, geramos uma abertura básica."
+                  placeholder="Se deixar vazio, usamos a pergunta curta sobre a cidade."
                 />
               </label>
               <button
