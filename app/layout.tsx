@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import './prospecting.css';
+import './agency.css';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-export const metadata: Metadata = { title: 'Fluxa CRM | Captação odontológica', description: 'CRM local para operação comercial de clínicas odontológicas.' };
+export const metadata: Metadata = { title: 'Fluxa CRM | Parcerias com agências', description: 'CRM privado para prospecção e parcerias de produção com agências.' };
 
 export default function RootLayout({
   children,

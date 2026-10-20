@@ -1,63 +1,63 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { getD1 } from '@/db';
-import { SALES_SCRIPTS, SEED_LEADS } from '@/db/seed-data';
 
-export const STAGES = ['01 PROSPECTADO','02 QUALIFICADO','03 CONTATO PRONTO','04 MENSAGEM ENVIADA','05 RESPONDEU','06 INTERESSADO','07 PRÉVIA ACEITA','08 PRÉVIA EM PRODUÇÃO','09 PRÉVIA ENVIADA','10 NEGOCIAÇÃO','11 FECHADO','12 PAGO','13 EM PRODUÇÃO','14 ENTREGUE','15 FOLLOW-UP','16 PERDIDO'] as const;
+export const STAGES = ['01 PESQUISADA','02 PRONTA','03 MENSAGEM ENVIADA','04 RESPONDEU','05 DEMANDA IDENTIFICADA','06 PROPOSTA ENVIADA','07 FECHADA','08 PERDIDA'] as const;
+const intro=(name:string,focus:string)=>`Oi, pessoal da ${name}! Vi que vocês trabalham com ${focus}. Sou designer e desenvolvedor e posso apoiar a equipe em demandas pontuais, nos bastidores — criativos para campanhas, landing pages e automações. Vocês estão com alguma entrega represada ou precisando de reforço em alguma dessas frentes esta semana? Se fizer sentido, envio alguns trabalhos e combinamos um primeiro projeto de escopo fechado.`;
+const AGENCIES=[
+  {id:'agency-cosmica',name:'Agência Cósmica',focus:'mídias sociais, tráfego pago e landing pages',opportunity:'Apoio de produção para campanhas e páginas',contact:'https://www.agenciacosmica.com.br/contato',email:'contato@agenciacosmica.com.br',source:'https://www.agenciacosmica.com.br/servicos',priority:3},
+  {id:'agency-one8020',name:'ONE 80/20',focus:'tráfego pago, redes sociais e websites',opportunity:'Criativos e landing pages para campanhas',contact:'https://one8020.com.br/',email:'',source:'https://one8020.com.br/',priority:3},
+  {id:'agency-lothax',name:'Lothax',focus:'SEO, sites, anúncios e direção de arte',opportunity:'Apoio em design e produção web',contact:'https://www.lothax.com.br/',email:'',source:'https://www.lothax.com.br/',priority:3},
+  {id:'agency-quartza',name:'QUARTZA',focus:'identidade visual, gestão de redes sociais e tráfego pago',opportunity:'Criativos e identidade visual em projetos pontuais',contact:'https://www.agenciaquartza.com.br/',email:'agenciaquartza@gmail.com',source:'https://www.agenciaquartza.com.br/',priority:3},
+  {id:'agency-storm',name:'Storm Studio',focus:'redes sociais, vídeo e branding',opportunity:'Apoio em peças visuais e páginas de campanha',contact:'https://www.stormlabs.com.br/',email:'',source:'https://www.stormlabs.com.br/',priority:2},
+  {id:'agency-dyzzi',name:'DYZZI',focus:'conteúdo, design, tráfego e automações',opportunity:'Apoio de execução em design e automações',contact:'https://www.agenciadyzzi.com.br/',email:'',source:'https://www.agenciadyzzi.com.br/',priority:2},
+  {id:'agency-include',name:'INCLUDE',focus:'tráfego pago e gestão de redes sociais',opportunity:'Criativos e landing pages para clientes da agência',contact:'https://www.includeweb.com.br/',email:'',source:'https://www.includeweb.com.br/',priority:2},
+  {id:'agency-tante',name:'Tante Comunicação Digital',focus:'sites, inbound marketing e redes sociais',opportunity:'Apoio em páginas e materiais visuais',contact:'https://www.tante.com.br/',email:'',source:'https://www.tante.com.br/',priority:2},
+];
+const isAgency=(id:string)=>id.startsWith('agency-');
+const today=()=>new Date().toISOString().slice(0,10);
+const plusDays=(n:number)=>new Date(Date.now()+n*86400000).toISOString().slice(0,10);
 
-export async function ensureSeeded() {
-  const db = getD1();
-  const count = await db.prepare('SELECT COUNT(*) AS total FROM leads').first<{total:number}>();
-  if ((count?.total ?? 0) > 0) return;
-  const now = new Date().toISOString();
-  await db.batch(SEED_LEADS.map((l) => db.prepare('INSERT OR IGNORE INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(l.id,l.leadNumber,l.clinic,l.location,l.city,l.neighborhood,l.stage,l.score,l.scoreBreakdown,l.className,l.siteIssue,l.siteProblem,l.instagram,l.rating,l.reviewCount,l.services,l.phone,l.whatsappUrl,l.rationale,l.verificationNotes,l.specificOpening,JSON.stringify(l.sources),now,now)));
+export async function ensureSeeded(){
+  const db=getD1();const found=(await db.prepare("SELECT id FROM leads WHERE id LIKE 'agency-%'").all()).results as {id:string}[];const ids=new Set(found.map(x=>x.id));
+  const max=await db.prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads').first<{value:number}>();let number=max?.value??0;const now=new Date().toISOString();
+  const inserts=AGENCIES.filter(a=>!ids.has(a.id)).map(a=>db.prepare('INSERT OR IGNORE INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(a.id,++number,a.name,'Recife · PE','Recife','—','02 PRONTA',a.priority,'Prioridade da primeira rodada',a.priority===3?'Alta':'Média',a.opportunity,a.opportunity,a.email,0,0,a.focus,'',a.contact,'Possível parceria; necessidade ainda não confirmada.','Serviços verificados em site oficial. Confirmar pessoa e canal antes de enviar.',intro(a.name,a.focus),JSON.stringify([{type:'Site oficial',url:a.source,use:'Serviços declarados'},{type:'Contato',url:a.contact,use:'Canal público'}]),now,now));
+  if(inserts.length)await db.batch(inserts);
 }
 
-export async function bootstrap() {
-  await ensureSeeded(); const db = getD1();
-  const leads = (await db.prepare('SELECT * FROM leads ORDER BY score DESC, review_count DESC').all()).results;
-  const events = (await db.prepare('SELECT * FROM lead_events ORDER BY created_at DESC').all()).results;
-  const notes = (await db.prepare('SELECT * FROM lead_notes ORDER BY created_at DESC').all()).results;
-  const now = new Date().toISOString(), day=now.slice(0,10);
-  const active = leads.filter((l:any) => !['11 FECHADO','12 PAGO','13 EM PRODUÇÃO','14 ENTREGUE','16 PERDIDO'].includes(l.stage));
-  const number = (key:string) => leads.filter((l:any) => l[key]).length;
-  const approached=number('first_contact_at'), replies=number('replied_at'), interested=leads.filter((l:any)=>l.interest==='Sim').length, sales=number('closed_at');
-  const metrics={total:leads.length,ready:leads.filter((l:any)=>String(l.whatsapp_url).startsWith('https://wa.me/')).length,approached,replies,interested,previewAccepted:number('preview_accepted_at'),previewSent:number('preview_sent_at'),negotiations:number('proposal_at'),sales,paid:number('paid_at'),revenue:leads.reduce((s:number,l:any)=>s+(Number(l.closed_value)||0),0),due:active.filter((l:any)=>l.next_follow_up_at?.slice(0,10)===day).length,overdue:active.filter((l:any)=>l.next_follow_up_at && l.next_follow_up_at.slice(0,10)<day).length,replyRate:approached?replies/approached:null,closeRate:interested?sales/interested:null};
+export async function bootstrap(){
+  await ensureSeeded();const db=getD1();
+  const leads=(await db.prepare("SELECT * FROM leads WHERE id LIKE 'agency-%' ORDER BY score DESC, lead_number ASC").all()).results as any[];
+  const events=(await db.prepare("SELECT e.* FROM lead_events e JOIN leads l ON l.id=e.lead_id WHERE l.id LIKE 'agency-%' ORDER BY e.created_at DESC").all()).results;
+  const notes=(await db.prepare("SELECT n.* FROM lead_notes n JOIN leads l ON l.id=n.lead_id WHERE l.id LIKE 'agency-%' ORDER BY n.created_at DESC").all()).results;
+  const count=(key:string)=>leads.filter(l=>l[key]).length;const active=leads.filter(l=>!['07 FECHADA','08 PERDIDA'].includes(l.stage));const approached=count('first_contact_at'),replies=count('replied_at');
+  const metrics={total:leads.length,ready:leads.filter(l=>l.stage==='02 PRONTA').length,approached,replies,demands:leads.filter(l=>['05 DEMANDA IDENTIFICADA','06 PROPOSTA ENVIADA','07 FECHADA'].includes(l.stage)).length,proposals:count('proposal_at'),sales:count('closed_at'),revenue:leads.reduce((sum,l)=>sum+(Number(l.closed_value)||0),0),due:active.filter(l=>l.next_follow_up_at?.slice(0,10)===today()).length,overdue:active.filter(l=>l.next_follow_up_at&&l.next_follow_up_at.slice(0,10)<today()).length,replyRate:approached?replies/approached:null};
   return {leads,events,notes,metrics,stages:STAGES};
 }
+const ACTIONS:Record<string,{stage:string;event:string}>={ready:{stage:'02 PRONTA',event:'Contato qualificado'},mark_sent:{stage:'03 MENSAGEM ENVIADA',event:'Mensagem enviada'},mark_replied:{stage:'04 RESPONDEU',event:'Resposta recebida'},demand:{stage:'05 DEMANDA IDENTIFICADA',event:'Demanda identificada'},proposal:{stage:'06 PROPOSTA ENVIADA',event:'Proposta enviada'},sale:{stage:'07 FECHADA',event:'Parceria fechada'},lost:{stage:'08 PERDIDA',event:'Oportunidade perdida'}};
 
-const ACTIONS:Record<string,{stage:string,event:string,fields?:Record<string,unknown>}>= {
-  mark_sent:{stage:'04 MENSAGEM ENVIADA',event:'Mensagem enviada',fields:{contact_result:'Aguardando resposta'}}, mark_replied:{stage:'05 RESPONDEU',event:'Resposta recebida',fields:{contact_result:'Respondeu'}}, mark_interested:{stage:'06 INTERESSADO',event:'Lead interessado',fields:{interest:'Sim'}}, mark_not_interested:{stage:'16 PERDIDO',event:'Sem interesse',fields:{interest:'Não',contact_result:'Sem interesse'}}, preview_accepted:{stage:'07 PRÉVIA ACEITA',event:'Prévia aceita'}, preview_sent:{stage:'09 PRÉVIA ENVIADA',event:'Prévia enviada'}, negotiation:{stage:'10 NEGOCIAÇÃO',event:'Negociação iniciada'}, sale:{stage:'11 FECHADO',event:'Venda fechada'}, paid:{stage:'12 PAGO',event:'Pagamento confirmado',fields:{paid:1}}, delivered:{stage:'14 ENTREGUE',event:'Projeto entregue'}, no_response:{stage:'15 FOLLOW-UP',event:'Sem resposta',fields:{contact_result:'Não respondeu'}}, lost:{stage:'16 PERDIDO',event:'Lead perdido'}, schedule_followup:{stage:'15 FOLLOW-UP',event:'Follow-up agendado'}
-};
-
-export async function updateLead(input:{id:string;action?:string;stage?:string;value?:number;followUpAt?:string}) {
-  await ensureSeeded(); const db=getD1(); const lead=await db.prepare('SELECT stage FROM leads WHERE id=?').bind(input.id).first<{stage:string}>(); if(!lead)throw new Error('Lead não encontrado.');
-  const def=input.stage?{stage:input.stage,event:'Etapa atualizada'}:ACTIONS[input.action||'']; if(!def||!STAGES.includes(def.stage as any))throw new Error('Ação ou etapa inválida.');
-  const now=new Date().toISOString(); const fields:Record<string,unknown>={stage:def.stage,updated_at:now,...def.fields};
-  if(input.action==='mark_sent'){fields.first_contact_at=now;fields.last_contact_at=now;fields.next_follow_up_at=input.followUpAt||new Date(Date.now()+2*86400000).toISOString().slice(0,10)}
+export async function updateLead(input:{id:string;action?:string;stage?:string;value?:number;followUpAt?:string}){
+  if(!isAgency(input.id||''))throw new Error('Lead fora da operação de agências.');await ensureSeeded();const db=getD1();const lead=await db.prepare('SELECT stage FROM leads WHERE id=?').bind(input.id).first<{stage:string}>();if(!lead)throw new Error('Agência não encontrada.');
+  const now=new Date().toISOString();
+  if(input.action==='schedule_followup'){
+    if(['07 FECHADA','08 PERDIDA'].includes(lead.stage))throw new Error('Esta oportunidade já foi concluída.');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(input.followUpAt||''))throw new Error('Informe uma data válida.');
+    await db.batch([db.prepare('UPDATE leads SET next_follow_up_at=?,updated_at=? WHERE id=?').bind(input.followUpAt,now,input.id),db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(input.id,'Follow-up agendado',lead.stage,lead.stage,JSON.stringify({date:input.followUpAt}),now)]);return bootstrap();
+  }
+  const allowed:Record<string,string[]>={ready:['01 PESQUISADA'],mark_sent:['02 PRONTA'],mark_replied:['03 MENSAGEM ENVIADA'],demand:['04 RESPONDEU'],proposal:['05 DEMANDA IDENTIFICADA'],sale:['06 PROPOSTA ENVIADA'],lost:['01 PESQUISADA','02 PRONTA','03 MENSAGEM ENVIADA','04 RESPONDEU','05 DEMANDA IDENTIFICADA','06 PROPOSTA ENVIADA']};
+  if(!input.action||!allowed[input.action]?.includes(lead.stage))throw new Error('Esta ação não corresponde à etapa atual.');
+  const def=ACTIONS[input.action];if(!def)throw new Error('Ação inválida.');
+  const fields:Record<string,unknown>={stage:def.stage,updated_at:now};
+  if(input.action==='mark_sent'){fields.first_contact_at=now;fields.last_contact_at=now;fields.next_follow_up_at=input.followUpAt||plusDays(2)}
   if(input.action==='mark_replied'){fields.replied_at=now;fields.last_contact_at=now;fields.next_follow_up_at=null}
-  if(input.action==='preview_accepted')fields.preview_accepted_at=now;if(input.action==='preview_sent')fields.preview_sent_at=now;if(input.action==='negotiation')fields.proposal_at=now;
-  if(input.action==='sale'){if(!input.value||input.value<=0)throw new Error('Informe o valor da venda.');fields.closed_at=now;fields.closed_value=input.value;fields.next_follow_up_at=null}
-  if(input.action==='paid')fields.paid_at=now;if(input.action==='delivered')fields.delivered_at=now;
-  if(['schedule_followup','no_response'].includes(input.action||'')){if(!input.followUpAt)throw new Error('Informe a data do follow-up.');fields.next_follow_up_at=input.followUpAt}
-  const keys=Object.keys(fields); const update=db.prepare(`UPDATE leads SET ${keys.map(k=>`${k}=?`).join(',')} WHERE id=?`).bind(...keys.map(k=>fields[k]),input.id);
-  const event=db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(input.id,def.event,lead.stage,def.stage,JSON.stringify({value:input.value,followUpAt:input.followUpAt}),now);
-  await db.batch([update,event]); return bootstrap();
+  if(input.action==='demand')fields.interest='Sim';
+  if(input.action==='proposal'){fields.proposal_at=now;fields.next_follow_up_at=plusDays(2)}
+  if(input.action==='sale'){if(!input.value||input.value<=0)throw new Error('Informe o valor do projeto.');fields.closed_at=now;fields.closed_value=input.value;fields.next_follow_up_at=null}
+  if(input.action==='lost')fields.next_follow_up_at=null;
+  const keys=Object.keys(fields);await db.batch([db.prepare(`UPDATE leads SET ${keys.map(k=>`${k}=?`).join(',')} WHERE id=?`).bind(...keys.map(k=>fields[k]),input.id),db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(input.id,def.event,lead.stage,def.stage,JSON.stringify({value:input.value}),now)]);return bootstrap();
 }
-
-export async function addNote(id:string,body:string){if(!body.trim())throw new Error('A nota não pode ficar vazia.');await ensureSeeded();const db=getD1();await db.prepare('INSERT INTO lead_notes (lead_id,body,created_at) VALUES (?,?,?)').bind(id,body.trim(),new Date().toISOString()).run();return bootstrap()}
-
-export async function addManualLead(input:{clinic?:string;city?:string;neighborhood?:string;phone?:string;whatsapp?:string;services?:string}) {
-  const clinic=input.clinic?.trim(), city=input.city?.trim(), phone=input.phone?.trim();
-  if(!clinic||!city||!phone)throw new Error('Preencha clínica, cidade e telefone.');
-  await ensureSeeded(); const db=getD1();
-  const max=await db.prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads').first<{value:number}>();
-  const leadNumber=(max?.value??0)+1, now=new Date().toISOString();
-  const digits=(input.whatsapp||phone).replace(/\D/g,'');
-  const normalized=digits.length>=12?digits:digits.length>=10?`55${digits}`:'';
-  const whatsappUrl=normalized?`https://wa.me/${normalized}`:'Não disponível';
-  const id=`lead-manual-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-  const stage=normalized?'03 CONTATO PRONTO':'02 QUALIFICADO';
-  const insert=db.prepare('INSERT INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,leadNumber,clinic,`${city} / ${input.neighborhood?.trim()||'bairro a confirmar'}`,city,input.neighborhood?.trim()||'bairro a confirmar',stage,1,'Lead adicionado manualmente — qualificação pendente','Novo','A confirmar','Lead manual ainda precisa de pesquisa e qualificação.','Não confirmado',0,0,input.services?.trim()||'Não verificados',phone,whatsappUrl,'Lead adicionado manualmente para pesquisa e prospecção.','Dados informados manualmente; confirme presença, serviços e contato antes da abordagem.',SALES_SCRIPTS.noSite,'[]',now,now);
-  const event=db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(id,'Lead adicionado manualmente',null,stage,null,now);
-  await db.batch([insert,event]); return bootstrap();
+export async function addNote(id:string,body:string){if(!isAgency(id))throw new Error('Lead fora da operação de agências.');if(!body.trim())throw new Error('Escreva uma nota.');await ensureSeeded();const db=getD1();await db.prepare('INSERT INTO lead_notes (lead_id,body,created_at) VALUES (?,?,?)').bind(id,body.trim(),new Date().toISOString()).run();return bootstrap()}
+export async function addManualLead(input:{name?:string;city?:string;contact?:string;email?:string;focus?:string;opportunity?:string;opening?:string}){
+  const name=input.name?.trim(),contact=input.contact?.trim(),email=input.email?.trim();if(!name||(!contact&&!email))throw new Error('Informe o nome e um canal de contato.');if(contact&&!/^https:\/\//i.test(contact))throw new Error('O link deve começar com https://.');
+  await ensureSeeded();const db=getD1();const max=await db.prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads').first<{value:number}>();const now=new Date().toISOString();const id=`agency-manual-${crypto.randomUUID()}`;const city=input.city?.trim()||'A confirmar';const focus=input.focus?.trim()||'serviços a confirmar';
+  await db.batch([db.prepare('INSERT INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,(max?.value??0)+1,name,city,city,'—','01 PESQUISADA',1,'Lead manual — verificar dados','Nova',input.opportunity?.trim()||'A investigar',input.opportunity?.trim()||'A investigar',email||'',0,0,focus,'',contact||'','Necessidade ainda não confirmada.','Lead manual; verificar contato e serviços antes de enviar.',input.opening?.trim()||intro(name,focus),JSON.stringify(contact?[{type:'Contato informado',url:contact,use:'Verificar antes de abordar'}]:[]),now,now),db.prepare('INSERT INTO lead_events (lead_id,event_type,from_stage,to_stage,metadata_json,created_at) VALUES (?,?,?,?,?,?)').bind(id,'Agência adicionada',null,'01 PESQUISADA',null,now)]);return bootstrap();
 }
