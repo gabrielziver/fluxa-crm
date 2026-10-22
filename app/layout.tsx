@@ -6,6 +6,7 @@ import './city.css';
 import './research.css';
 import './contact.css';
 import './manual-research.css';
+import './dashboard.css';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',

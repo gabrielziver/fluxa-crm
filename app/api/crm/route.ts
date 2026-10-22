@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/no-explicit-any */
-import { addManualLead, addNote, bootstrap, updateLead } from '@/lib/crm';
+import { addManualLead, addNote, bootstrap, createClient, deleteClient, updateClient, updateLead } from '@/lib/crm';
 
 export async function GET(){try{return Response.json(await bootstrap())}catch(error){return Response.json({error:error instanceof Error?error.message:'Erro ao carregar o CRM.'},{status:500})}}
-export async function POST(request:Request){try{const body=await request.json() as any;if(body.type==='note')return Response.json(await addNote(body.id,body.body));if(body.type==='add_lead')return Response.json(await addManualLead(body));return Response.json(await updateLead(body))}catch(error){return Response.json({error:error instanceof Error?error.message:'Erro ao atualizar o CRM.'},{status:400})}}
+export async function POST(request:Request){try{const body=await request.json() as any;if(body.type==='note')return Response.json(await addNote(body.id,body.body));if(body.type==='add_lead')return Response.json(await addManualLead(body));if(body.type==='client_create')return Response.json(await createClient(body));if(body.type==='client_update')return Response.json(await updateClient(body));if(body.type==='client_delete')return Response.json(await deleteClient(body.id));return Response.json(await updateLead(body))}catch(error){return Response.json({error:error instanceof Error?error.message:'Erro ao atualizar o CRM.'},{status:400})}}

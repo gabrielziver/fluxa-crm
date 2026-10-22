@@ -625,6 +625,9 @@ export async function bootstrap() {
       )
       .all()
   ).results;
+  const clients = (
+    await db.prepare('SELECT * FROM clients ORDER BY status ASC, updated_at DESC').all()
+  ).results as any[];
   const count = (key: string) => leads.filter((l) => l[key]).length;
   const active = leads.filter(
     (l) => !['07 FECHADA', '08 PERDIDA'].includes(l.stage),
@@ -651,7 +654,7 @@ export async function bootstrap() {
     ).length,
     replyRate: approached ? replies / approached : null,
   };
-  return { leads, events, notes, metrics, stages: STAGES };
+  return { leads, events, notes, clients, metrics, stages: STAGES };
 }
 const ACTIONS: Record<string, { stage: string; event: string }> = {
   ready: { stage: '02 PRONTA', event: 'Contato qualificado' },
@@ -891,5 +894,68 @@ export async function addManualLead(input: {
       )
       .bind(id, 'Agência adicionada', null, '01 PESQUISADA', null, now),
   ]);
+  return bootstrap();
+}
+
+type ClientInput = {
+  id?: string;
+  name?: string;
+  status?: string;
+  category?: string;
+  receivable?: number;
+  expenses?: number;
+  totalRevenue?: number;
+  referenceMonth?: string;
+  services?: { description?: string; value?: number }[];
+};
+
+const normalizeClient = (input: ClientInput) => {
+  const name = input.name?.trim();
+  if (!name) throw new Error('Informe o nome do cliente.');
+  const services = (input.services || [])
+    .map((service) => ({
+      description: service.description?.trim() || 'Serviço',
+      value: Math.max(0, Number(service.value) || 0),
+    }))
+    .filter((service) => service.description || service.value);
+  return {
+    name,
+    status: input.status === 'inactive' ? 'inactive' : 'active',
+    category: input.category?.trim() || 'Outros',
+    monthlyRevenue: services.reduce((sum, service) => sum + service.value, 0),
+    receivable: Math.max(0, Number(input.receivable) || 0),
+    expenses: Math.max(0, Number(input.expenses) || 0),
+    totalRevenue: Math.max(0, Number(input.totalRevenue) || 0),
+    referenceMonth: /^\d{4}-\d{2}$/.test(input.referenceMonth || '')
+      ? input.referenceMonth!
+      : new Date().toISOString().slice(0, 7),
+    servicesJson: JSON.stringify(services),
+  };
+};
+
+export async function createClient(input: ClientInput) {
+  await ensureSeeded();
+  const db = getD1();
+  const client = normalizeClient(input);
+  const now = new Date().toISOString();
+  await db.prepare('INSERT INTO clients (id,name,status,category,monthly_revenue,receivable,expenses,total_revenue,reference_month,services_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .bind(`client-${crypto.randomUUID()}`, client.name, client.status, client.category, client.monthlyRevenue, client.receivable, client.expenses, client.totalRevenue, client.referenceMonth, client.servicesJson, now, now).run();
+  return bootstrap();
+}
+
+export async function updateClient(input: ClientInput) {
+  if (!input.id?.startsWith('client-')) throw new Error('Cliente inválido.');
+  await ensureSeeded();
+  const db = getD1();
+  const client = normalizeClient(input);
+  await db.prepare('UPDATE clients SET name=?,status=?,category=?,monthly_revenue=?,receivable=?,expenses=?,total_revenue=?,reference_month=?,services_json=?,updated_at=? WHERE id=?')
+    .bind(client.name, client.status, client.category, client.monthlyRevenue, client.receivable, client.expenses, client.totalRevenue, client.referenceMonth, client.servicesJson, new Date().toISOString(), input.id).run();
+  return bootstrap();
+}
+
+export async function deleteClient(id: string) {
+  if (!id?.startsWith('client-')) throw new Error('Cliente inválido.');
+  await ensureSeeded();
+  await getD1().prepare('DELETE FROM clients WHERE id=?').bind(id).run();
   return bootstrap();
 }

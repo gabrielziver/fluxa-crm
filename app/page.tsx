@@ -9,8 +9,10 @@ import {
   ChevronRight,
   Clipboard,
   Copy,
+  DollarSign,
   ExternalLink,
   FolderOpen,
+  HandCoins,
   LayoutDashboard,
   Mail,
   MessageCircle,
@@ -19,21 +21,28 @@ import {
   Send,
   Sparkles,
   Target,
+  Trash2,
+  TrendingUp,
   Users,
+  WalletCards,
   X,
 } from 'lucide-react';
 import ResearchPanel from './ResearchPanel';
 import { initialMessage, replyMessage, whatsappLink } from '@/lib/outreach';
 
 type Lead = Record<string, any>;
+type Client = Record<string, any>;
 type Data = {
   leads: Lead[];
   events: Lead[];
   notes: Lead[];
+  clients: Client[];
   metrics: Record<string, number | null>;
   stages: string[];
 };
-type Tab = 'fila' | 'pesquisa' | 'followups' | 'guia';
+type Tab = 'dashboard' | 'fila' | 'pesquisa' | 'followups' | 'clientes' | 'guia';
+const CATEGORIES = ['Social Media', 'Landing Page', 'Tráfego Pago', 'Branding', 'Consultoria', 'Desenvolvimento', 'Outros'];
+const emptyClient = () => ({ name: '', status: 'active', category: 'Social Media', receivable: '', expenses: '', totalRevenue: '', referenceMonth: new Date().toISOString().slice(0, 7), services: [{ description: '', value: '' }] });
 const CITIES = ['Recife · PE', 'Curitiba · PR', 'São Paulo · SP'];
 const firstMessage = (lead: Lead) =>
   lead.id?.startsWith('agency-manual-') &&
@@ -70,13 +79,16 @@ export default function Page() {
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [tab, setTab] = useState<Tab>('fila'),
+    [tab, setTab] = useState<Tab>('dashboard'),
     [city, setCity] = useState('Recife · PE'),
     [selectedId, setSelectedId] = useState<string | null>(null),
     [query, setQuery] = useState(''),
     [filter, setFilter] = useState('A abordar'),
     [toast, setToast] = useState(''),
     [showAdd, setShowAdd] = useState(false),
+    [showClient, setShowClient] = useState(false),
+    [editingClient, setEditingClient] = useState<string | null>(null),
+    [clientDraft, setClientDraft] = useState<any>(emptyClient()),
     [draft, setDraft] = useState({
       name: '',
       city: 'Recife',
@@ -216,6 +228,22 @@ export default function Page() {
       if (name === 'sale') setSaleValue('');
     }
   };
+  const editClient = (client?: Client) => {
+    if (!client) {
+      setEditingClient(null);
+      setClientDraft(emptyClient());
+    } else {
+      let services = [];
+      try { services = JSON.parse(client.services_json || '[]'); } catch { services = []; }
+      setEditingClient(client.id);
+      setClientDraft({ name: client.name, status: client.status, category: client.category, receivable: String(client.receivable || ''), expenses: String(client.expenses || ''), totalRevenue: String(client.total_revenue || ''), referenceMonth: client.reference_month, services: services.length ? services.map((s:any) => ({ description: s.description, value: String(s.value || '') })) : [{ description: '', value: '' }] });
+    }
+    setShowClient(true);
+  };
+  const saveClient = async () => {
+    const ok = await post({ type: editingClient ? 'client_update' : 'client_create', id: editingClient || undefined, ...clientDraft, receivable: Number(clientDraft.receivable), expenses: Number(clientDraft.expenses), totalRevenue: Number(clientDraft.totalRevenue), services: clientDraft.services.map((s:any) => ({ description: s.description, value: Number(s.value) })) });
+    if (ok) setShowClient(false);
+  };
   if (error && !data)
     return (
       <main className="loading">
@@ -232,6 +260,19 @@ export default function Page() {
       </main>
     );
   const m = data.metrics;
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const activeClients = data.clients.filter((client) => client.status === 'active');
+  const monthRevenue = data.clients.reduce((sum, client) => sum + ((client.status === 'active' || client.reference_month === currentMonth) ? Number(client.monthly_revenue || 0) : 0), 0);
+  const receivable = data.clients.reduce((sum, client) => sum + Number(client.receivable || 0), 0);
+  const expenses = data.clients.reduce((sum, client) => sum + Number(client.expenses || 0), 0);
+  const categories = CATEGORIES.map((name) => ({ name, value: data.clients.filter((client) => client.category === name).reduce((sum, client) => sum + Number(client.monthly_revenue || 0), 0) })).filter((item) => item.value > 0);
+  const categoryTotal = categories.reduce((sum, item) => sum + item.value, 0) || 1;
+  const pipeline = [
+    { name: 'A abordar', value: data.leads.filter((lead) => ['01 PESQUISADA','02 PRONTA'].includes(lead.stage)).length },
+    { name: 'Em conversa', value: data.leads.filter((lead) => ['03 MENSAGEM ENVIADA','04 RESPONDEU','05 DEMANDA IDENTIFICADA','06 PROPOSTA ENVIADA'].includes(lead.stage)).length },
+    { name: 'Fechadas', value: data.leads.filter((lead) => lead.stage === '07 FECHADA').length },
+  ];
+  const maxPipeline = Math.max(1, ...pipeline.map((item) => item.value));
   return (
     <div className="shell">
       <aside className="nav">
@@ -245,6 +286,13 @@ export default function Page() {
           </div>
         </div>
         <div className="nav-section">OPERAÇÃO</div>
+        <button
+          className={tab === 'dashboard' ? 'active' : ''}
+          onClick={() => setTab('dashboard')}
+        >
+          <LayoutDashboard size={18} />
+          Visão geral
+        </button>
         <button
           className={tab === 'fila' ? 'active' : ''}
           onClick={() => setTab('fila')}
@@ -268,6 +316,13 @@ export default function Page() {
           Follow-ups{due.length > 0 && <b>{due.length}</b>}
         </button>
         <button
+          className={tab === 'clientes' ? 'active' : ''}
+          onClick={() => setTab('clientes')}
+        >
+          <WalletCards size={18} />
+          Clientes & finanças
+        </button>
+        <button
           className={tab === 'guia' ? 'active' : ''}
           onClick={() => setTab('guia')}
         >
@@ -287,19 +342,27 @@ export default function Page() {
             <h1>
               {tab === 'fila'
                 ? 'Agências para prospectar'
+                : tab === 'dashboard'
+                  ? 'Visão geral do negócio'
                 : tab === 'pesquisa'
                   ? 'Pesquisa de agências'
                   : tab === 'followups'
                     ? 'Conversas para retomar'
+                    : tab === 'clientes'
+                      ? 'Clientes e finanças'
                     : 'Oferta e abordagem'}
             </h1>
             <p>
               {tab === 'fila'
                 ? 'Uma lista inicial para iniciar conversas reais — sem supor que exista demanda.'
+                : tab === 'dashboard'
+                  ? 'Prospecção, carteira de clientes e saúde financeira em um só lugar.'
                 : tab === 'pesquisa'
                   ? 'Monte novos lotes por região sem precisar pedir uma lista no chat.'
                   : tab === 'followups'
                     ? 'Próximas ações organizadas por data.'
+                    : tab === 'clientes'
+                      ? 'Receitas, serviços e valores a receber por cliente.'
                     : 'Um roteiro simples para transformar conversa em projeto.'}
             </p>
           </div>
@@ -310,6 +373,7 @@ export default function Page() {
             <button
               className="primary"
               onClick={() => {
+                if (tab === 'clientes') { editClient(); return; }
                 const [selectedCity, selectedState] = city.split(' · ');
                 setDraft((current) => ({
                   ...current,
@@ -319,7 +383,7 @@ export default function Page() {
                 setShowAdd(true);
               }}
             >
-              <Plus size={17} /> Nova agência
+              <Plus size={17} /> {tab === 'clientes' ? 'Novo cliente' : 'Nova agência'}
             </button>
           </div>
         </header>
@@ -337,7 +401,7 @@ export default function Page() {
             </button>
           </div>
         )}
-        <div className="kpis">
+        {tab !== 'dashboard' && tab !== 'clientes' && <div className="kpis">
           <div>
             <Users />
             <span>Agências</span>
@@ -363,7 +427,47 @@ export default function Page() {
             <span>Projetos fechados</span>
             <strong>{m.sales}</strong>
           </div>
-        </div>
+        </div>}
+        {tab === 'dashboard' && (
+          <div className="business-dashboard">
+            <div className="finance-kpis">
+              <article><span className="metric-icon teal"><TrendingUp /></span><div><small>RECEITA DO MÊS</small><strong>{money(monthRevenue)}</strong><p>recorrência ativa</p></div></article>
+              <article><span className="metric-icon blue"><Users /></span><div><small>CLIENTES ATIVOS</small><strong>{activeClients.length}</strong><p>{data.clients.length} na carteira</p></div></article>
+              <article><span className="metric-icon violet"><Target /></span><div><small>LEADS NO FUNIL</small><strong>{data.leads.length}</strong><p>{m.replies || 0} respostas</p></div></article>
+              <article><span className="metric-icon amber"><HandCoins /></span><div><small>A RECEBER</small><strong>{money(receivable)}</strong><p>despesas: {money(expenses)}</p></div></article>
+            </div>
+            <div className="dashboard-panels">
+              <section className="panel wide">
+                <div className="panel-title"><div><small>PIPELINE COMERCIAL</small><h2>Da pesquisa ao fechamento</h2></div><button className="text-button" onClick={() => setTab('fila')}>Abrir prospecção →</button></div>
+                <div className="pipeline-chart">
+                  {pipeline.map((item) => <div key={item.name}><span>{item.name}<b>{item.value}</b></span><i><em style={{width: `${Math.max(item.value ? 8 : 0, item.value / maxPipeline * 100)}%`}} /></i></div>)}
+                </div>
+              </section>
+              <section className="panel">
+                <div className="panel-title"><div><small>RECEITA POR CATEGORIA</small><h2>Mix de serviços</h2></div></div>
+                {categories.length ? <div className="category-list">{categories.map((item, index) => <div key={item.name}><i style={{background: ['#12a8b5','#4f7df3','#8b5cf6','#f59e0b','#10b981','#ef6f61','#64748b'][index]}} /><span>{item.name}</span><b>{Math.round(item.value/categoryTotal*100)}%</b><small>{money(item.value)}</small></div>)}</div> : <div className="mini-empty">Cadastre clientes para visualizar a distribuição.</div>}
+              </section>
+            </div>
+            <section className="panel latest">
+              <div className="panel-title"><div><small>MOVIMENTO RECENTE</small><h2>Últimos leads</h2></div><button className="text-button" onClick={() => setTab('clientes')}>Gerenciar clientes →</button></div>
+              <div className="simple-table"><div className="simple-row head"><span>Agência</span><span>Etapa</span><span>Cidade</span><span>Oportunidade</span></div>{data.leads.slice(0,5).map((lead) => <button className="simple-row" key={lead.id} onClick={() => setSelectedId(lead.id)}><strong>{lead.clinic}</strong><span><i className="status-dot" />{cleanStage(lead.stage)}</span><span>{lead.location}</span><span>{lead.site_issue}</span></button>)}</div>
+            </section>
+          </div>
+        )}
+        {tab === 'clientes' && (
+          <div className="clients-page">
+            <div className="finance-kpis compact">
+              <article><span className="metric-icon teal"><DollarSign /></span><div><small>RECEITA MENSAL</small><strong>{money(monthRevenue)}</strong></div></article>
+              <article><span className="metric-icon blue"><Users /></span><div><small>CLIENTES ATIVOS</small><strong>{activeClients.length}</strong></div></article>
+              <article><span className="metric-icon amber"><HandCoins /></span><div><small>A RECEBER</small><strong>{money(receivable)}</strong></div></article>
+              <article><span className="metric-icon violet"><WalletCards /></span><div><small>SALDO PROJETADO</small><strong>{money(monthRevenue-expenses)}</strong></div></article>
+            </div>
+            <section className="panel clients-table-panel">
+              <div className="panel-title"><div><small>CARTEIRA</small><h2>Clientes e serviços</h2></div><button className="primary" onClick={() => editClient()}><Plus size={16}/> Adicionar cliente</button></div>
+              {data.clients.length ? <div className="clients-table"><div className="client-row head"><span>Cliente</span><span>Categoria</span><span>Status</span><span>Mensal</span><span>A receber</span><span>Ações</span></div>{data.clients.map((client) => <div className="client-row" key={client.id}><strong>{client.name}<small>{(() => { try { return JSON.parse(client.services_json||'[]').map((s:any)=>s.description).join(', ') || 'Sem serviços'; } catch { return 'Sem serviços'; } })()}</small></strong><span>{client.category}</span><span className={`client-status ${client.status}`}>{client.status === 'active' ? 'Ativo' : 'Inativo'}</span><b>{money(client.monthly_revenue)}</b><span>{money(client.receivable)}</span><span className="client-actions"><button onClick={() => editClient(client)}>Editar</button><button className="delete" onClick={() => { if (confirm(`Excluir ${client.name}?`)) post({type:'client_delete',id:client.id}); }} aria-label="Excluir"><Trash2 size={15}/></button></span></div>)}</div> : <div className="empty"><WalletCards/><strong>Sua carteira começa aqui.</strong><p>Cadastre o primeiro cliente e os serviços contratados.</p><button className="primary" onClick={() => editClient()}><Plus size={16}/> Novo cliente</button></div>}
+            </section>
+          </div>
+        )}
         {tab === 'fila' && (
           <>
             <div className="city-batches">
@@ -997,6 +1101,20 @@ export default function Page() {
               >
                 <Plus size={16} /> Adicionar à fila
               </button>
+            </div>
+          </aside>
+        </div>
+      )}
+      {showClient && (
+        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowClient(false); }}>
+          <aside className="drawer add-drawer client-drawer">
+            <div className="drawer-head"><div><small>CLIENTES & FINANÇAS</small><h2>{editingClient ? 'Editar cliente' : 'Novo cliente'}</h2></div><button aria-label="Fechar" onClick={() => setShowClient(false)}><X /></button></div>
+            <div className="drawer-body add-form">
+              <div className="form-grid"><label>Nome do cliente *<input value={clientDraft.name} onChange={(e) => setClientDraft({...clientDraft,name:e.target.value})}/></label><label>Status<select value={clientDraft.status} onChange={(e) => setClientDraft({...clientDraft,status:e.target.value})}><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label></div>
+              <div className="form-grid"><label>Categoria<select value={clientDraft.category} onChange={(e) => setClientDraft({...clientDraft,category:e.target.value})}>{CATEGORIES.map((category)=><option key={category}>{category}</option>)}</select></label><label>Mês de referência<input type="month" value={clientDraft.referenceMonth} onChange={(e) => setClientDraft({...clientDraft,referenceMonth:e.target.value})}/></label></div>
+              <div className="services-editor"><div className="services-title"><span>SERVIÇOS CONTRATADOS</span><button onClick={() => setClientDraft({...clientDraft,services:[...clientDraft.services,{description:'',value:''}]})}><Plus size={14}/> Serviço</button></div>{clientDraft.services.map((service:any,index:number)=><div className="service-row" key={index}><input placeholder="Ex.: Gestão de tráfego" value={service.description} onChange={(e) => { const services=[...clientDraft.services];services[index]={...service,description:e.target.value};setClientDraft({...clientDraft,services}); }}/><input type="number" min="0" placeholder="R$ 0" value={service.value} onChange={(e) => { const services=[...clientDraft.services];services[index]={...service,value:e.target.value};setClientDraft({...clientDraft,services}); }}/><button disabled={clientDraft.services.length===1} onClick={() => setClientDraft({...clientDraft,services:clientDraft.services.filter((_:any,i:number)=>i!==index)})}><X size={15}/></button></div>)}<strong className="services-total">Mensalidade total <b>{money(clientDraft.services.reduce((sum:number,s:any)=>sum+Number(s.value||0),0))}</b></strong></div>
+              <div className="form-grid three"><label>A receber<input type="number" min="0" value={clientDraft.receivable} onChange={(e) => setClientDraft({...clientDraft,receivable:e.target.value})}/></label><label>Despesas<input type="number" min="0" value={clientDraft.expenses} onChange={(e) => setClientDraft({...clientDraft,expenses:e.target.value})}/></label><label>Receita histórica<input type="number" min="0" value={clientDraft.totalRevenue} onChange={(e) => setClientDraft({...clientDraft,totalRevenue:e.target.value})}/></label></div>
+              <button className="primary" disabled={busy || !clientDraft.name.trim()} onClick={saveClient}>{editingClient ? 'Salvar alterações' : 'Adicionar cliente'}</button>
             </div>
           </aside>
         </div>
