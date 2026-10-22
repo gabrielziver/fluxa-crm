@@ -1,21 +1,58 @@
-# Fluxa CRM — parcerias com agências
+# Fluxa CRM
 
-Operação privada de prospecção manual para oferecer apoio de execução a agências de marketing. A oferta inicial é um projeto pago e de escopo fechado: criativos para campanhas, landing pages ou uma automação delimitada.
+CRM full-stack criado para organizar prospecção comercial, relacionamento com leads, follow-ups, clientes, serviços e indicadores financeiros em uma única aplicação.
 
-## Uso diário
+![Dashboard do Fluxa CRM](public/dashboard-fluxa.png)
 
-1. Abra **Prospecção** e escolha uma agência em **A abordar**.
-2. Confira serviços, fontes e canal público. Personalize a mensagem copiada antes de enviar.
-3. Envie você mesmo pelo canal adequado. O CRM não envia mensagens.
-4. Marque **Mensagem enviada** somente depois do envio. O follow-up é agendado para dois dias depois.
-5. Registre resposta, demanda, proposta, valor fechado e notas conforme acontecerem.
+## Visão do produto
 
-O painel de **Follow-ups** mostra contatos vencidos ou de hoje. O guia **Oferta e scripts** ajuda a qualificar demandas e definir o que entra ou não no primeiro projeto.
+O Fluxa transforma uma lista de oportunidades em um processo comercial rastreável. A operação começa pela pesquisa de empresas, passa por abordagem e follow-up e termina no controle dos clientes conquistados e da receita gerada.
 
-## Dados
+### Principais recursos
 
-O banco anterior não é apagado. Os registros odontológicos permanecem armazenados para recuperação, mas não aparecem na operação atual. A tabela mantém nomes técnicos antigos (`clinic`, `site_issue`, `instagram`); na interface, esses campos representam agência, oportunidade e e-mail. Uma migração estrutural poderá renomeá-los no futuro sem pressa nem risco aos dados.
+- Dashboard executivo com receita mensal, clientes ativos, leads e valores a receber
+- Funil comercial da pesquisa ao fechamento
+- Pesquisa e importação de agências por região
+- Fila de prospecção com prioridade, estágio e abordagem personalizada
+- Atalhos para WhatsApp e canais públicos de contato
+- Follow-ups automáticos por data
+- Histórico de eventos e notas por lead
+- Cadastro de clientes ativos e inativos
+- Múltiplos serviços e mensalidades por cliente
+- Controle de despesas, receita histórica e valores a receber
+- Interface responsiva para desktop e celular
 
-As oito agências iniciais vêm de sites oficiais. A compatibilidade de serviços é uma hipótese de parceria, **não** uma indicação de que haja vaga ou demanda aberta. Contatos manuais entram como **Pesquisada** e devem ser verificados.
+## Prospecção e relacionamento
 
-Não há prospecção automática, conexão não oficial com WhatsApp, envio de mensagens, garantia de resposta nem promessa de faturamento.
+![Área de prospecção](public/prospeccao-fluxa.png)
+
+Cada oportunidade possui estágio, contexto comercial, canal de contato, mensagem inicial, notas e histórico. O sistema não dispara mensagens de forma não oficial: ele apoia uma abordagem manual, personalizada e auditável.
+
+## Clientes e finanças
+
+![Clientes e finanças](public/clientes-fluxa.png)
+
+O módulo financeiro conecta a execução comercial à carteira conquistada. Cada cliente pode ter vários serviços, categoria, mensalidade, despesas, receita acumulada e saldo pendente.
+
+## Stack
+
+- React 19 e TypeScript
+- Vinext e Vite
+- Cloudflare Workers e D1
+- Drizzle ORM
+- Tailwind CSS
+- Lucide Icons
+
+## Arquitetura
+
+- `app/`: interface e rotas da aplicação
+- `app/api/crm/`: API do CRM
+- `lib/`: regras de negócio, prospecção e persistência
+- `db/`: schema do banco D1
+- `drizzle/`: migrações versionadas
+
+## Sobre o projeto
+
+Projeto de portfólio desenvolvido por **Gabriel Oliveira**. Os nomes e dados exibidos nas capturas são fictícios ou utilizados apenas como demonstração da interface.
+
+> Este repositório é apresentado para fins de portfólio e avaliação técnica.

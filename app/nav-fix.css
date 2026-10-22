@@ -1,0 +1,8 @@
+.shell .nav > button > svg:first-child {
+  margin-left: 0 !important;
+  flex: none;
+}
+
+.shell .nav > button {
+  justify-content: flex-start;
+}
