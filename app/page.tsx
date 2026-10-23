@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import ResearchPanel from './ResearchPanel';
 import PreviewStudio from './PreviewStudio';
-import { initialMessage, replyMessage, whatsappLink } from '@/lib/outreach';
+import { initialMessage, positiveReplyMessage, secondMessage, whatsappLink } from '@/lib/outreach';
 
 type Lead = Record<string, any>;
 type Client = Record<string, any>;
@@ -44,12 +44,7 @@ type Data = {
 type Tab = 'dashboard' | 'fila' | 'pesquisa' | 'previews' | 'followups' | 'clientes' | 'guia';
 const CATEGORIES = ['Social Media', 'Landing Page', 'Tráfego Pago', 'Branding', 'Consultoria', 'Desenvolvimento', 'Outros'];
 const emptyClient = () => ({ name: '', status: 'active', category: 'Social Media', receivable: '', expenses: '', totalRevenue: '', referenceMonth: new Date().toISOString().slice(0, 7), services: [{ description: '', value: '' }] });
-const firstMessage = (lead: Lead) =>
-  lead.id?.startsWith('agency-manual-') &&
-  lead.specific_opening &&
-  !lead.specific_opening.startsWith('Oi, pessoal da ')
-    ? lead.specific_opening
-    : initialMessage(lead.city, lead.clinic);
+const firstMessage = (lead: Lead) => initialMessage(lead.city, lead.clinic);
 const followupText = (name: string) =>
   `Oi, pessoal da ${name}! Passando para retomar minha mensagem sobre apoio pontual em criativos, landing pages ou automações. Existe alguma demanda em que um parceiro de execução possa ajudar vocês esta semana?`;
 const cleanStage = (stage: string) => stage.replace(/^\d+\s/, '');
@@ -804,15 +799,27 @@ export default function Page() {
                 </button>
               </div>
               <div className="detail-block">
-                <span>2. SE ACEITAREM, CONFIRME A PRÉVIA</span>
+                <span>2. SEGUNDA MENSAGEM</span>
                 <blockquote style={{ whiteSpace: 'pre-line' }}>
-                  {replyMessage}
+                  {secondMessage}
                 </blockquote>
                 <button
                   className="outline"
-                  onClick={() => copy(replyMessage, 'Resposta copiada.')}
+                  onClick={() => copy(secondMessage, 'Segunda mensagem copiada.')}
                 >
-                  <Copy size={16} /> Copiar resposta
+                  <Copy size={16} /> Copiar segunda mensagem
+                </button>
+              </div>
+              <div className="detail-block">
+                <span>3. APÓS A RESPOSTA POSITIVA</span>
+                <blockquote style={{ whiteSpace: 'pre-line' }}>
+                  {positiveReplyMessage}
+                </blockquote>
+                <button
+                  className="outline"
+                  onClick={() => copy(positiveReplyMessage, 'Terceira mensagem copiada.')}
+                >
+                  <Copy size={16} /> Copiar terceira mensagem
                 </button>
               </div>
               <div className="contact-actions">
