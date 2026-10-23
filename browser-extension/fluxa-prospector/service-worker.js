@@ -72,6 +72,20 @@ const MIXED_NICHES = [
   'escritórios de contabilidade',
   'restaurantes',
 ];
+const NICHE_VARIANTS = {
+  restaurante: ['restaurantes', 'lanchonetes', 'pizzarias'],
+  barbearia: ['barbearias', 'barbeiros'],
+  beleza: ['salões de beleza', 'centros de estética', 'manicures'],
+  clinica: ['clínicas médicas', 'consultórios', 'clínicas de fisioterapia'],
+  odontologia: ['clínicas odontológicas', 'dentistas', 'consultórios odontológicos'],
+  academia: ['academias', 'estúdios de pilates', 'crossfit'],
+  imobiliaria: ['imobiliárias', 'corretores de imóveis'],
+  energia_solar: ['empresas de energia solar', 'instaladores de painel solar'],
+  pet: ['pet shops', 'clínicas veterinárias'],
+  contabilidade: ['escritórios de contabilidade', 'contadores'],
+  advocacia: ['escritórios de advocacia', 'advogados'],
+  arquitetura: ['escritórios de arquitetura', 'arquitetos'],
+};
 
 async function candidatesFor(query, scanLimit) {
   const url = `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
@@ -89,8 +103,11 @@ async function research(payload) {
   const requested = Math.min(10, Math.max(1, Number(payload.limit || 10)));
   const category = String(payload.category || 'negócio local');
   const location = String(payload.location || '').trim();
-  const queries = payload.categoryKey === 'todas' && location
-    ? MIXED_NICHES.map((niche) => `${niche} em ${location}`)
+  const terms = payload.categoryKey === 'todas'
+    ? MIXED_NICHES
+    : NICHE_VARIANTS[payload.categoryKey] || [category];
+  const queries = location
+    ? terms.map((term) => `${term} em ${location}`)
     : [String(payload.query || '').trim()];
   const matches = [];
   const seen = new Set();

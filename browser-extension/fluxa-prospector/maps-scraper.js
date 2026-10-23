@@ -71,24 +71,29 @@ async function collect(limit) {
   const feed = document.querySelector('[role="feed"]');
   if (!feed) throw new Error('A lista de resultados do Google Maps não apareceu. Tente outra cidade ou nicho.');
 
+  const unique = new Map();
+  const collectVisible = () => {
+    for (const article of feed.querySelectorAll('[role="article"]')) {
+      const row = scrapeArticle(article);
+      if (row && !unique.has(row.mapUrl)) unique.set(row.mapUrl, row);
+      if (unique.size >= limit) break;
+    }
+  };
   let unchanged = 0;
   let previous = 0;
-  for (let round = 0; round < 35; round += 1) {
-    const count = feed.querySelectorAll('[role="article"]').length;
-    if (count >= limit) break;
-    unchanged = count === previous ? unchanged + 1 : 0;
-    if (unchanged >= 4 || feed.innerText.includes('Você chegou ao final da lista')) break;
-    previous = count;
-    feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
-    await pause(900 + Math.floor(Math.random() * 500));
-  }
-
-  const unique = new Map();
-  for (const article of feed.querySelectorAll('[role="article"]')) {
-    const row = scrapeArticle(article);
-    if (row && !unique.has(row.mapUrl)) unique.set(row.mapUrl, row);
+  for (let round = 0; round < 55; round += 1) {
+    collectVisible();
     if (unique.size >= limit) break;
+    unchanged = unique.size === previous ? unchanged + 1 : 0;
+    if (unchanged >= 6 || feed.innerText.includes('Você chegou ao final da lista')) break;
+    previous = unique.size;
+    const articles = feed.querySelectorAll('[role="article"]');
+    articles[articles.length - 1]?.scrollIntoView({ block: 'end' });
+    feed.scrollTop = feed.scrollHeight;
+    feed.dispatchEvent(new WheelEvent('wheel', { deltaY: 1100, bubbles: true }));
+    await pause(1100 + Math.floor(Math.random() * 450));
   }
+  collectVisible();
   const rows = [...unique.values()];
   if (!rows.length) throw new Error('Nenhuma empresa foi encontrada nessa pesquisa.');
   return rows;
