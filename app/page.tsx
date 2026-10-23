@@ -697,6 +697,17 @@ export default function Page() {
                         <Search size={16} /> Buscar WhatsApp
                       </button>
                     )}
+                    {['01 PESQUISADA', '02 PRONTA'].includes(lead.stage) &&
+                      whatsappLink(lead.phone, firstMessage(lead)) && (
+                        <button
+                          className="quick-sent"
+                          disabled={busy}
+                          onClick={() => void action(lead, 'mark_sent')}
+                          title="Marcar a abordagem como enviada"
+                        >
+                          <CheckCircle2 size={16} /> Já enviei
+                        </button>
+                      )}
                     <button
                       className="outline"
                       onClick={() => setSelectedId(lead.id)}

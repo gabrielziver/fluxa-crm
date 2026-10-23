@@ -700,7 +700,7 @@ export async function updateLead(input: {
   }
   const allowed: Record<string, string[]> = {
     ready: ['01 PESQUISADA'],
-    mark_sent: ['02 PRONTA'],
+    mark_sent: ['01 PESQUISADA', '02 PRONTA'],
     mark_replied: ['03 MENSAGEM ENVIADA'],
     demand: ['04 RESPONDEU'],
     proposal: ['05 DEMANDA IDENTIFICADA'],
@@ -725,6 +725,13 @@ export async function updateLead(input: {
     throw new Error(
       'Encontre e confira um canal de contato antes de marcar como pronta.',
     );
+  if (
+    input.action === 'mark_sent' &&
+    !lead.whatsapp_url &&
+    !lead.instagram &&
+    !lead.phone
+  )
+    throw new Error('Adicione um canal de contato antes de marcar a mensagem como enviada.');
   const def = ACTIONS[input.action];
   if (!def) throw new Error('Ação inválida.');
   const fields: Record<string, unknown> = { stage: def.stage, updated_at: now };
