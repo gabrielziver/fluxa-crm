@@ -80,3 +80,25 @@
 .detail-phone { margin: 8px 0; }
 .lead-phone svg,
 .detail-phone svg { flex: none; }
+
+.qualification {
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.qualification.high { background: #dcf6e8; color: #117143; }
+.qualification.medium { background: #fff1d7; color: #93600a; }
+.qualification.low { background: #eef2f6; color: #66788b; }
+.google-proof {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+  color: #9a6700;
+  font-size: 11px;
+}
+.google-proof strong { color: #654a14; }
+.google-proof span { color: #6f7f90; }

@@ -20,6 +20,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Star,
   Target,
   Trash2,
   TrendingUp,
@@ -74,6 +75,15 @@ const googleMapsSource = (lead: Lead) =>
   safeSources(lead.sources_json).find((source) =>
     source.url.includes('google.com/maps/'),
   )?.url || '';
+const leadQualification = (lead: Lead) => {
+  const rating = Number(lead.rating || 0);
+  const reviews = Number(lead.review_count || 0);
+  if (rating >= 4.5 && reviews >= 50)
+    return { label: 'Qualificação alta', tone: 'high', rank: 3 };
+  if (rating >= 4.2 && reviews >= 15)
+    return { label: 'Qualificação média', tone: 'medium', rank: 2 };
+  return { label: 'Qualificação baixa', tone: 'low', rank: 1 };
+};
 
 export default function Page() {
   const [data, setData] = useState<Data | null>(null),
@@ -237,11 +247,17 @@ export default function Page() {
   }, [data, city]);
   const visible = (
     groups[filter as keyof typeof groups] || groups.Todos
-  ).filter((l) =>
-    `${l.clinic} ${l.services} ${l.site_issue}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  )
+    .filter((l) =>
+      `${l.clinic} ${l.services} ${l.site_issue}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+    )
+    .sort((a, b) =>
+      leadQualification(b).rank - leadQualification(a).rank ||
+      Number(b.review_count || 0) - Number(a.review_count || 0) ||
+      Number(b.rating || 0) - Number(a.rating || 0),
+    );
   const due = groups['Follow-ups'].sort((a, b) =>
     a.next_follow_up_at.localeCompare(b.next_follow_up_at),
   );
@@ -632,10 +648,8 @@ export default function Page() {
               {visible.map((lead) => (
                 <article className="agency-card" key={lead.id}>
                   <div className="card-top">
-                    <span
-                      className={`priority ${lead.score >= 3 ? 'high' : ''}`}
-                    >
-                      {lead.score >= 3 ? 'Prioridade alta' : 'Prioridade média'}
+                    <span className={`qualification ${leadQualification(lead).tone}`}>
+                      {leadQualification(lead).label}
                     </span>
                     <span className="card-status-actions">
                       <span className="stage">{cleanStage(lead.stage)}</span>
@@ -652,6 +666,11 @@ export default function Page() {
                   </div>
                   <h3>{lead.clinic}</h3>
                   <p className="focus">{lead.services}</p>
+                  <div className="google-proof">
+                    <Star size={14} fill="currentColor" />
+                    <strong>{Number(lead.rating || 0) ? Number(lead.rating).toFixed(1) : 'Sem nota'}</strong>
+                    <span>· {Number(lead.review_count || 0)} avaliações no Google</span>
+                  </div>
                   {lead.phone && (
                     <p className="lead-phone"><Phone size={14} /> {formatBrazilianPhone(lead.phone)}</p>
                   )}

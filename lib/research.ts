@@ -76,6 +76,11 @@ const cleanUrl = (text?: string) => {
 };
 const safeText = (value?: string, limit = 180) =>
   value?.trim().slice(0, limit) || '';
+const qualificationFor = (rating: number, reviewCount: number) => {
+  if (rating >= 4.5 && reviewCount >= 50) return { label: 'Alta', score: 5 };
+  if (rating >= 4.2 && reviewCount >= 15) return { label: 'Média', score: 3 };
+  return { label: 'Baixa', score: 1 };
+};
 function validate(input: {
   city?: string;
   state?: string;
@@ -351,7 +356,8 @@ export async function importAgencies(input: {
     const email = safeText(item.email, 120);
     const phone = formatBrazilianPhone(safeText(item.phone, 50));
     const focus = safeText(item.category, 80) || 'negócio local (confirmar serviços)';
-    const score = Math.min(4, 1 + Number(!website) + Number(Boolean(phone)) + Number((item.reviewCount || 0) >= 20));
+    const qualification = qualificationFor(Number(item.rating || 0), Number(item.reviewCount || 0));
+    const score = qualification.score;
     const opening = initialMessage(city);
     inserts.push(
       db
@@ -367,8 +373,8 @@ export async function importAgencies(input: {
           safeText(item.address, 120) || '—',
           '01 PESQUISADA',
           score,
-          `${!website ? 'Sem site informado' : 'Site informado'} · ${item.reviewCount || 0} avaliações`,
-          score >= 4 ? 'Alta' : score >= 3 ? 'Média' : 'Nova',
+          `${Number(item.rating || 0) ? `Nota ${Number(item.rating).toFixed(1)}` : 'Sem nota'} · ${item.reviewCount || 0} avaliações · ${!website ? 'Sem site' : 'Site informado'}`,
+          qualification.label,
           website ? 'Avaliar qualidade do site atual.' : 'Empresa sem site informado no mapa.',
           website ? 'Site existente — verificar oportunidade de melhoria.' : 'Boa candidata para uma prévia gratuita.',
           email,
@@ -428,10 +434,9 @@ export async function importPastedAgencies(input: {
   });
   if (
     !Array.isArray(input.rows) ||
-    input.rows.length < 1 ||
-    input.rows.length > 100
+    input.rows.length < 1
   )
-    throw new Error('Cole entre 1 e 100 empresas.');
+    throw new Error('Nenhuma empresa foi recebida para importar.');
   const location = `${city || STATES[state]} · ${state}`;
   const db = getD1();
   const existing = (
@@ -467,7 +472,8 @@ export async function importPastedAgencies(input: {
     const category = safeText(row.category, 80) || 'negócio local (confirmar serviços)';
     const address = safeText(row.address, 120) || '—';
     const image = cleanUrl(row.image);
-    const score = Math.min(4, 1 + Number(Boolean(mapUrl)) + Number(reviewCount >= 20) + Number(rating >= 4.5));
+    const qualification = qualificationFor(rating, reviewCount);
+    const score = qualification.score;
     inserts.push(
       db
         .prepare(
@@ -483,7 +489,7 @@ export async function importPastedAgencies(input: {
           '01 PESQUISADA',
           score,
           mapUrl ? `${rating ? `Nota ${rating.toFixed(1)}` : 'Sem nota'} · ${reviewCount} avaliações` : 'Importação manual — verificar dados',
-          score >= 4 ? 'Alta' : score >= 3 ? 'Média' : 'Nova',
+          qualification.label,
           contact ? 'Verificar se o site pode ser melhorado.' : 'Empresa sem site informado.',
           contact ? 'Site existente — verificar oportunidade.' : 'Boa candidata para uma prévia gratuita.',
           email,
@@ -505,6 +511,7 @@ export async function importPastedAgencies(input: {
         ),
     );
   }
-  if (inserts.length) await db.batch(inserts);
+  for (let index = 0; index < inserts.length; index += 100)
+    await db.batch(inserts.slice(index, index + 100));
   return { imported: inserts.length, data: await bootstrap(), location };
 }

@@ -100,7 +100,8 @@ async function candidatesFor(query, scanLimit) {
 }
 
 async function research(payload) {
-  const requested = Math.min(10, Math.max(1, Number(payload.limit || 10)));
+  const rawLimit = Math.max(0, Math.round(Number(payload.limit || 0)));
+  const requested = rawLimit === 0 ? Number.POSITIVE_INFINITY : rawLimit;
   const category = String(payload.category || 'negócio local');
   const location = String(payload.location || '').trim();
   const terms = payload.categoryKey === 'todas'
@@ -117,7 +118,10 @@ async function research(payload) {
     if (!query || matches.length >= requested) break;
     try {
       const remaining = requested - matches.length;
-      const candidates = await candidatesFor(query, Math.min(45, Math.max(18, remaining * 4)));
+      const scanLimit = Number.isFinite(remaining)
+        ? Math.min(500, Math.max(40, remaining * 5))
+        : 500;
+      const candidates = await candidatesFor(query, scanLimit);
       inspectedSearches += 1;
       const found = await enrichWithoutWebsite(candidates, remaining, category, seen);
       matches.push(...found);
@@ -128,7 +132,11 @@ async function research(payload) {
 
   if (!matches.length)
     throw new Error(`Pesquisei ${inspectedSearches || 1} grupo(s) no Google Maps, mas nenhum negócio sem site foi confirmado. Informe uma cidade e tente um nicho específico.`);
-  return matches;
+  return matches.sort((a, b) => {
+    const aQualified = Number(a.rating >= 4.5 && a.reviewCount >= 50);
+    const bQualified = Number(b.rating >= 4.5 && b.reviewCount >= 50);
+    return bQualified - aQualified || b.reviewCount - a.reviewCount || b.rating - a.rating;
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -147,7 +155,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   if (message?.type !== 'FLUXA_SEARCH') return false;
   const query = String(message.payload?.query || '').trim().slice(0, 160);
-  const limit = Math.min(10, Math.max(1, Number(message.payload?.limit || 10)));
+  const limit = Math.max(0, Math.round(Number(message.payload?.limit || 0)));
   const category = String(message.payload?.category || 'negócio local').trim().slice(0, 80);
   if (!query) {
     sendResponse({ ok: false, error: 'Informe cidade e nicho para pesquisar.' });

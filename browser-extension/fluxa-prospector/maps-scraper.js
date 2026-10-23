@@ -23,6 +23,7 @@ function scrapeArticle(article) {
   if (!name || !mapUrl) return null;
 
   const text = article.innerText.split('\n').map((item) => item.trim()).filter(Boolean);
+  if (text.some((item) => /fechado (?:permanente|temporariamente)/i.test(item))) return null;
   const ratingLabel = article.querySelector('[role="img"][aria-label*="estrela"], [aria-label*=" estrelas"]')?.getAttribute('aria-label') || '';
   const rating = Number((ratingLabel.match(/[1-5][,.]\d/)?.[0] || '').replace(',', '.')) || 0;
   const reviewText = text.find((item) => /^\(?[\d.]+\)?$/.test(item) && numberFrom(item) > 5) || ratingLabel;
@@ -81,7 +82,7 @@ async function collect(limit) {
   };
   let unchanged = 0;
   let previous = 0;
-  for (let round = 0; round < 55; round += 1) {
+  for (let round = 0; round < 180; round += 1) {
     collectVisible();
     if (unique.size >= limit) break;
     unchanged = unique.size === previous ? unchanged + 1 : 0;
@@ -107,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'FLUXA_SCRAPE_MAPS') {
-    collect(Math.min(90, Math.max(1, Number(message.limit || 30))))
+    collect(Math.min(500, Math.max(1, Number(message.limit || 50))))
       .then((rows) => sendResponse({ ok: true, rows }))
       .catch((error) => sendResponse({ ok: false, error: error.message || 'Falha ao ler o Google Maps.' }));
     return true;

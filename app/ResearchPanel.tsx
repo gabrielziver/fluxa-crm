@@ -105,7 +105,7 @@ export default function ResearchPanel({
     [state, setState] = useState('PR'),
     [category, setCategory] = useState('todas'),
     [customCategory, setCustomCategory] = useState(''),
-    [limit, setLimit] = useState(10),
+    [limit, setLimit] = useState(50),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [message, setMessage] = useState(''),
@@ -192,7 +192,7 @@ export default function ResearchPanel({
         category: chosenCategory,
         categoryKey: category,
         location: `${searchCity} ${state}`,
-        limit: Math.min(10, Math.max(1, limit)),
+        limit: Math.max(0, Math.round(limit || 0)),
         onlyWithoutWebsite: true,
       },
     }, window.location.origin);
@@ -331,18 +331,17 @@ export default function ResearchPanel({
           </label>
         )}
         <label>
-          Meta de resultados
+          Quantidade <small>(0 = buscar até esgotar)</small>
           <input
             type="number"
-            min="1"
-            max="10"
+            min="0"
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
           />
         </label>
         <button
           className="primary"
-          disabled={busy || !state || !chosenCategory || limit < 1 || limit > 10}
+          disabled={busy || !state || !chosenCategory || limit < 0}
           onClick={automaticSearch}
         >
           <Search size={16} />
@@ -351,7 +350,7 @@ export default function ResearchPanel({
       </div>
       <p className="research-note">
         {extensionReady
-          ? 'Complemento conectado. O Fluxa verifica o campo “Site” de cada ficha e traz até 10 empresas qualificadas por rodada. Em “Todos”, ele combina vários nichos automaticamente.'
+          ? 'Complemento conectado. O Fluxa verifica o campo “Site”, coleta nota e avaliações e ordena os leads por qualificação. Use 0 para pesquisar até o Google Maps esgotar os resultados.'
           : 'Para a pesquisa realmente automática e sem API paga, instale uma única vez o complemento Fluxa Prospector no Brave.'}
       </p>
       {error && <div className="research-error">{error}</div>}
