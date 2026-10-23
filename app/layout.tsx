@@ -8,6 +8,7 @@ import './contact.css';
 import './manual-research.css';
 import './dashboard.css';
 import './nav-fix.css';
+import './preview-studio.css';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -19,7 +20,7 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-export const metadata: Metadata = { title: 'Fluxa CRM | Parcerias com agências', description: 'CRM privado para prospecção e parcerias de produção com agências.' };
+export const metadata: Metadata = { title: 'Fluxa CRM | Prospecção e prévias', description: 'CRM para encontrar empresas, abordar contatos e criar prévias de sites.' };
 
 export default function RootLayout({
   children,

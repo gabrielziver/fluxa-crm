@@ -569,7 +569,6 @@ export async function ensureSeeded() {
         0,
         0,
         a.focus,
-        '',
         VERIFIED_PUBLIC_MOBILES[a.id] || '',
         a.contact,
         'Possível parceria; necessidade ainda não confirmada.',
@@ -628,6 +627,9 @@ export async function bootstrap() {
   const clients = (
     await db.prepare('SELECT * FROM clients ORDER BY status ASC, updated_at DESC').all()
   ).results as any[];
+  const previews = (
+    await db.prepare('SELECT p.*,l.clinic,l.location,l.phone FROM previews p JOIN leads l ON l.id=p.lead_id ORDER BY p.updated_at DESC').all()
+  ).results as any[];
   const count = (key: string) => leads.filter((l) => l[key]).length;
   const active = leads.filter(
     (l) => !['07 FECHADA', '08 PERDIDA'].includes(l.stage),
@@ -654,7 +656,7 @@ export async function bootstrap() {
     ).length,
     replyRate: approached ? replies / approached : null,
   };
-  return { leads, events, notes, clients, metrics, stages: STAGES };
+  return { leads, events, notes, clients, previews, metrics, stages: STAGES };
 }
 const ACTIONS: Record<string, { stage: string; event: string }> = {
   ready: { stage: '02 PRONTA', event: 'Contato qualificado' },

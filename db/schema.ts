@@ -34,3 +34,21 @@ export const clients = sqliteTable('clients', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (t) => [index('clients_status_idx').on(t.status), index('clients_month_idx').on(t.referenceMonth)]);
+
+export const previews = sqliteTable('previews', {
+  id: text('id').primaryKey(),
+  leadId: text('lead_id').notNull().unique().references(() => leads.id),
+  slug: text('slug').notNull().unique(),
+  status: text('status').notNull().default('draft'),
+  theme: text('theme').notNull().default('modern'),
+  accent: text('accent').notNull().default('#7c3aed'),
+  headline: text('headline').notNull(),
+  subheadline: text('subheadline').notNull(),
+  about: text('about').notNull(),
+  ctaLabel: text('cta_label').notNull().default('Falar no WhatsApp'),
+  heroImageUrl: text('hero_image_url').notNull().default(''),
+  galleryJson: text('gallery_json').notNull().default('[]'),
+  servicesJson: text('services_json').notNull().default('[]'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (t) => [index('previews_lead_idx').on(t.leadId), index('previews_slug_idx').on(t.slug)]);

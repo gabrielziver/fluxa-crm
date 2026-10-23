@@ -1,6 +1,7 @@
 import { getD1 } from '@/db';
 import { bootstrap } from '@/lib/crm';
 import { initialMessage } from '@/lib/outreach';
+import { env } from 'cloudflare:workers';
 
 const STATES: Record<string, string> = {
   AC: 'Acre',
@@ -31,7 +32,7 @@ const STATES: Record<string, string> = {
   SE: 'Sergipe',
   TO: 'Tocantins',
 };
-type Category = 'todas' | 'marketing' | 'comunicacao' | 'design';
+type Category = 'todas' | 'restaurante' | 'barbearia' | 'beleza' | 'clinica' | 'academia';
 type OSMElement = {
   type: string;
   id: number;
@@ -51,6 +52,11 @@ export type Candidate = {
   phone: string;
   osmUrl: string;
   address: string;
+  source?: 'google' | 'osm';
+  placeId?: string;
+  rating?: number;
+  reviewCount?: number;
+  hasWebsite?: boolean;
 };
 const normalize = (text: string) =>
   text
@@ -83,7 +89,7 @@ function validate(input: {
   if (!STATES[state]) throw new Error('Escolha um estado brasileiro.');
   if (city && !/^[\p{L}\s.'-]{2,60}$/u.test(city))
     throw new Error('Informe uma cidade válida.');
-  if (!['todas', 'marketing', 'comunicacao', 'design'].includes(category))
+  if (!['todas', 'restaurante', 'barbearia', 'beleza', 'clinica', 'academia'].includes(category))
     throw new Error('Categoria inválida.');
   if (!Number.isInteger(limit) || limit < 1 || limit > 100)
     throw new Error('Escolha entre 1 e 100 resultados.');
@@ -95,23 +101,98 @@ function queryFor(city: string, state: string, category: Category) {
     ? `rel(area.state)["boundary"="administrative"]["name"=${JSON.stringify(city)}];map_to_area->.searchArea;`
     : 'area.state->.searchArea;';
   const sections: string[] = [];
-  if (
-    category === 'todas' ||
-    category === 'marketing' ||
-    category === 'comunicacao'
-  )
-    sections.push(
-      'nwr(area.searchArea)["office"="advertising_agency"]["name"];',
-    );
-  if (category === 'todas' || category === 'comunicacao')
-    sections.push('nwr(area.searchArea)["office"="media"]["name"];');
-  if (category === 'todas' || category === 'design')
-    sections.push('nwr(area.searchArea)["office"="graphic_design"]["name"];');
-  if (category === 'todas' || category === 'marketing')
-    sections.push(
-      'nwr(area.searchArea)["office"="company"]["name"~"marketing|publicidade|agencia|agência|digital",i];',
-    );
+  if (category === 'todas' || category === 'restaurante') sections.push('nwr(area.searchArea)["amenity"~"restaurant|cafe|fast_food"]["name"];');
+  if (category === 'todas' || category === 'barbearia') sections.push('nwr(area.searchArea)["shop"="hairdresser"]["name"~"barbear|barber",i];');
+  if (category === 'todas' || category === 'beleza') sections.push('nwr(area.searchArea)["shop"~"beauty|hairdresser"]["name"];');
+  if (category === 'todas' || category === 'clinica') sections.push('nwr(area.searchArea)["amenity"~"clinic|dentist|doctors"]["name"];');
+  if (category === 'todas' || category === 'academia') sections.push('nwr(area.searchArea)["leisure"="fitness_centre"]["name"];');
   return `[out:json][timeout:12][maxsize:10485760];${stateArea}${cityArea}(${sections.join('')});out center 300;`;
+}
+
+const GOOGLE_CATEGORY: Record<Category, string> = {
+  todas: 'empresas locais',
+  restaurante: 'restaurantes',
+  barbearia: 'barbearias',
+  beleza: 'salões de beleza e clínicas de estética',
+  clinica: 'clínicas e consultórios',
+  academia: 'academias e estúdios fitness',
+};
+
+type GooglePlace = {
+  id?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  websiteUri?: string;
+  googleMapsUri?: string;
+  rating?: number;
+  userRatingCount?: number;
+  primaryTypeDisplayName?: { text?: string };
+};
+
+export async function searchGooglePlaces(input: {
+  city?: string;
+  state?: string;
+  category?: string;
+  limit?: number;
+}) {
+  const { city, state, category, limit } = validate(input);
+  const apiKey = String((env as unknown as Record<string, unknown>).GOOGLE_PLACES_API_KEY || '').trim();
+  if (!apiKey)
+    throw new Error('A busca Google Places ainda precisa da chave GOOGLE_PLACES_API_KEY. O código já está preparado; configure a chave para ativar a pesquisa real.');
+  const requested = Math.min(limit, 60);
+  const query = `${GOOGLE_CATEGORY[category]} em ${city || STATES[state]}, ${state}, Brasil`;
+  const collected: GooglePlace[] = [];
+  let pageToken = '';
+  while (collected.length < requested) {
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.googleMapsUri,places.rating,places.userRatingCount,places.primaryTypeDisplayName,nextPageToken',
+      },
+      body: JSON.stringify({ textQuery: query, languageCode: 'pt-BR', regionCode: 'BR', pageSize: Math.min(20, requested - collected.length), ...(pageToken ? { pageToken } : {}) }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const payload = await response.json() as { places?: GooglePlace[]; nextPageToken?: string; error?: { message?: string } };
+    if (!response.ok) throw new Error(payload.error?.message || 'A Google Places API recusou a pesquisa. Confira a chave, o faturamento e se a Places API (New) está ativada.');
+    collected.push(...(payload.places || []));
+    if (!payload.nextPageToken || !(payload.places || []).length) break;
+    pageToken = payload.nextPageToken;
+  }
+  const location = `${city || STATES[state]} · ${state}`;
+  const db = getD1();
+  const existing = (await db.prepare("SELECT id,clinic,location FROM leads WHERE id LIKE 'agency-%'").all()).results as { id:string; clinic:string; location:string }[];
+  const ids = new Set(existing.map((item) => item.id));
+  const names = new Set(existing.filter((item) => item.location === location).map((item) => normalize(item.clinic)));
+  const candidates = collected.map((place): Candidate | null => {
+    const placeId = safeText(place.id, 180);
+    const name = safeText(place.displayName?.text, 120);
+    if (!placeId || !name) return null;
+    return {
+      id: `agency-google-${placeId.replace(/[^A-Za-z0-9_-]/g, '')}`,
+      placeId,
+      source: 'google',
+      name,
+      city: city || STATES[state],
+      state,
+      category: safeText(place.primaryTypeDisplayName?.text, 80) || GOOGLE_CATEGORY[category],
+      website: cleanUrl(place.websiteUri),
+      email: '',
+      phone: safeText(place.nationalPhoneNumber || place.internationalPhoneNumber, 50),
+      osmUrl: cleanUrl(place.googleMapsUri),
+      address: safeText(place.formattedAddress, 180),
+      rating: Number(place.rating || 0),
+      reviewCount: Number(place.userRatingCount || 0),
+      hasWebsite: Boolean(place.websiteUri),
+    };
+  }).filter((candidate): candidate is Candidate => Boolean(candidate))
+    .filter((candidate) => !ids.has(candidate.id) && !names.has(normalize(candidate.name)))
+    .sort((a,b) => Number(a.hasWebsite)-Number(b.hasWebsite) || Number(Boolean(b.phone))-Number(Boolean(a.phone)) || (b.reviewCount || 0)-(a.reviewCount || 0))
+    .slice(0, requested);
+  return { candidates, found: collected.length, alreadyInCrm: collected.length-candidates.length, requested, city: city || '', state, location, provider: 'Google Places API (New)', attribution: 'Dados fornecidos pela Google Places API' };
 }
 export async function searchAgencies(input: {
   city?: string;
@@ -123,6 +204,8 @@ export async function searchAgencies(input: {
   const query = queryFor(city, state, category);
   const endpoints = [
     'https://overpass.private.coffee/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   ];
   let elements: OSMElement[] | null = null;
@@ -172,7 +255,7 @@ export async function searchAgencies(input: {
       name,
       city: city || STATES[state],
       state,
-      category: tags.office || 'agência',
+      category: tags.amenity || tags.shop || tags.leisure || 'empresa local',
       website,
       email,
       phone,
@@ -226,7 +309,7 @@ export async function importAgencies(input: {
   });
   const raw = input.candidates;
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 100)
-    throw new Error('Selecione de 1 a 100 agências para importar.');
+    throw new Error('Selecione de 1 a 100 empresas para importar.');
   const db = getD1();
   const location = `${city || STATES[state]} · ${state}`;
   const existing = (
@@ -247,8 +330,10 @@ export async function importAgencies(input: {
   const now = new Date().toISOString();
   const inserts = [];
   for (const item of raw) {
+    const isGoogle = item.source === 'google' && /^agency-google-[A-Za-z0-9_-]+$/.test(item.id);
+    const isOsm = /^agency-osm-(node|way|relation)-\d+$/.test(item.id);
     if (
-      !/^agency-osm-(node|way|relation)-\d+$/.test(item.id) ||
+      (!isGoogle && !isOsm) ||
       ids.has(item.id)
     )
       continue;
@@ -256,12 +341,17 @@ export async function importAgencies(input: {
     if (!name || names.has(normalize(name))) continue;
     ids.add(item.id);
     names.add(normalize(name));
-    const expected = `https://www.openstreetmap.org/${item.id.replace('agency-osm-', '').replace(/-(?=\d+$)/, '/')}`;
-    if (item.osmUrl !== expected) continue;
+    const expected = isGoogle ? cleanUrl(item.osmUrl) : `https://www.openstreetmap.org/${item.id.replace('agency-osm-', '').replace(/-(?=\d+$)/, '/')}`;
+    if (!expected) continue;
+    if (isGoogle) {
+      const hostname = new URL(expected).hostname;
+      if (!hostname.endsWith('google.com')) continue;
+    } else if (item.osmUrl !== expected) continue;
     const website = cleanUrl(item.website);
     const email = safeText(item.email, 120);
     const phone = safeText(item.phone, 50);
-    const focus = 'comunicação, marketing ou design (confirmar serviços)';
+    const focus = safeText(item.category, 80) || 'negócio local (confirmar serviços)';
+    const score = Math.min(4, 1 + Number(!website) + Number(Boolean(phone)) + Number((item.reviewCount || 0) >= 20));
     const opening = initialMessage(city);
     inserts.push(
       db
@@ -276,23 +366,23 @@ export async function importAgencies(input: {
           city || STATES[state],
           safeText(item.address, 120) || '—',
           '01 PESQUISADA',
-          1,
-          'Fonte aberta — verificar dados',
-          'Nova',
-          'Possível apoio de produção; demanda não confirmada.',
-          'Possível apoio de produção; demanda não confirmada.',
+          score,
+          `${!website ? 'Sem site informado' : 'Site informado'} · ${item.reviewCount || 0} avaliações`,
+          score >= 4 ? 'Alta' : score >= 3 ? 'Média' : 'Nova',
+          website ? 'Avaliar qualidade do site atual.' : 'Empresa sem site informado no mapa.',
+          website ? 'Site existente — verificar oportunidade de melhoria.' : 'Boa candidata para uma prévia gratuita.',
           email,
-          0,
-          0,
+          Number(item.rating || 0),
+          Number(item.reviewCount || 0),
           focus,
           phone,
           website,
-          'Possível parceria; necessidade ainda não confirmada.',
-          'Dados do OpenStreetMap podem estar incompletos ou desatualizados. Confirme agência, cidade, serviços e canal antes de abordar.',
+          'Possível cliente para criação de site; interesse ainda não confirmado.',
+          'Dados do OpenStreetMap podem estar incompletos ou desatualizados. Confirme empresa, cidade, serviços e canal antes de abordar.',
           opening,
           JSON.stringify([
             {
-              type: 'OpenStreetMap',
+              type: isGoogle ? 'Google Maps' : 'OpenStreetMap',
               url: expected,
               use: 'Fonte do registro geográfico',
             },
@@ -330,7 +420,7 @@ export async function importPastedAgencies(input: {
     input.rows.length < 1 ||
     input.rows.length > 100
   )
-    throw new Error('Cole entre 1 e 100 agências.');
+    throw new Error('Cole entre 1 e 100 empresas.');
   const location = `${city || STATES[state]} · ${state}`;
   const db = getD1();
   const existing = (
@@ -374,16 +464,16 @@ export async function importPastedAgencies(input: {
           1,
           'Importação manual — verificar dados',
           'Nova',
-          'Possível apoio de produção; demanda não confirmada.',
-          'Possível apoio de produção; demanda não confirmada.',
+          contact ? 'Verificar se o site pode ser melhorado.' : 'Empresa sem site informado.',
+          contact ? 'Site existente — verificar oportunidade.' : 'Boa candidata para uma prévia gratuita.',
           email,
           0,
           0,
-          'comunicação, marketing ou design (confirmar serviços)',
+          'negócio local (confirmar serviços)',
           phone,
           contact,
-          'Possível parceria; necessidade ainda não confirmada.',
-          'Agência colada pelo usuário; confirme a fonte, serviços, localização e canal antes de abordar.',
+          'Possível cliente para criação de site; interesse ainda não confirmado.',
+          'Empresa importada pelo usuário; confirme a fonte, serviços, localização e canal antes de abordar.',
           opening,
           JSON.stringify(
             contact

@@ -1,10 +1,11 @@
-export function initialMessage(city?: string) {
+export function initialMessage(city?: string, business?: string) {
   const place = city?.trim() || 'sua cidade';
-  return `Oi, pessoal! Vi que vocês são de ${place}. Poderiam me tirar uma dúvida?`;
+  const name = business?.trim() ? ` a ${business}` : ' vocês';
+  return `Oi, tudo bem? Encontrei${name} pesquisando empresas em ${place}. Vi uma oportunidade de apresentar melhor os serviços e facilitar os contatos pelo WhatsApp. Posso preparar e enviar gratuitamente uma prévia de como o site de vocês poderia ficar? É sem compromisso.`;
 }
 
 export const replyMessage =
-  'Sou designer e posso apoiar a equipe em demandas pontuais. Vocês estão com alguma entrega represada ou precisando de reforço em alguma demanda esta semana?\n\nSe fizer sentido, envio alguns trabalhos e combinamos um primeiro projeto de escopo fechado.';
+  'Perfeito! Vou montar uma demonstração usando as informações públicas da empresa. A prévia é gratuita e todos os textos, cores, fotos e serviços podem ser ajustados antes de colocar o site no ar.';
 
 export function whatsappLink(phone?: string): string {
   const digits = (phone || '').replace(/\D/g, '');

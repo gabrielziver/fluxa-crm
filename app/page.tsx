@@ -11,7 +11,6 @@ import {
   Copy,
   DollarSign,
   ExternalLink,
-  FolderOpen,
   HandCoins,
   LayoutDashboard,
   Mail,
@@ -28,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import ResearchPanel from './ResearchPanel';
+import PreviewStudio from './PreviewStudio';
 import { initialMessage, replyMessage, whatsappLink } from '@/lib/outreach';
 
 type Lead = Record<string, any>;
@@ -37,10 +37,11 @@ type Data = {
   events: Lead[];
   notes: Lead[];
   clients: Client[];
+  previews: Lead[];
   metrics: Record<string, number | null>;
   stages: string[];
 };
-type Tab = 'dashboard' | 'fila' | 'pesquisa' | 'followups' | 'clientes' | 'guia';
+type Tab = 'dashboard' | 'fila' | 'pesquisa' | 'previews' | 'followups' | 'clientes' | 'guia';
 const CATEGORIES = ['Social Media', 'Landing Page', 'Tráfego Pago', 'Branding', 'Consultoria', 'Desenvolvimento', 'Outros'];
 const emptyClient = () => ({ name: '', status: 'active', category: 'Social Media', receivable: '', expenses: '', totalRevenue: '', referenceMonth: new Date().toISOString().slice(0, 7), services: [{ description: '', value: '' }] });
 const CITIES = ['Recife · PE', 'Curitiba · PR', 'São Paulo · SP'];
@@ -49,7 +50,7 @@ const firstMessage = (lead: Lead) =>
   lead.specific_opening &&
   !lead.specific_opening.startsWith('Oi, pessoal da ')
     ? lead.specific_opening
-    : initialMessage(lead.city);
+    : initialMessage(lead.city, lead.clinic);
 const followupText = (name: string) =>
   `Oi, pessoal da ${name}! Passando para retomar minha mensagem sobre apoio pontual em criativos, landing pages ou automações. Existe alguma demanda em que um parceiro de execução possa ajudar vocês esta semana?`;
 const cleanStage = (stage: string) => stage.replace(/^\d+\s/, '');
@@ -256,7 +257,7 @@ export default function Page() {
     return (
       <main className="loading">
         <Sparkles />
-        <p>Preparando a operação de agências…</p>
+        <p>Preparando a operação comercial…</p>
       </main>
     );
   const m = data.metrics;
@@ -282,7 +283,7 @@ export default function Page() {
           </span>
           <div>
             <strong>Fluxa CRM</strong>
-            <small>Parcerias com agências</small>
+            <small>Prospecção e sites</small>
           </div>
         </div>
         <div className="nav-section">OPERAÇÃO</div>
@@ -306,7 +307,15 @@ export default function Page() {
           onClick={() => setTab('pesquisa')}
         >
           <Search size={18} />
-          Pesquisar agências
+          Pesquisar empresas
+        </button>
+        <button
+          className={tab === 'previews' ? 'active' : ''}
+          onClick={() => setTab('previews')}
+        >
+          <Sparkles size={18} />
+          Criar prévias
+          {data.previews.length > 0 && <b>{data.previews.length}</b>}
         </button>
         <button
           className={tab === 'followups' ? 'active' : ''}
@@ -331,8 +340,8 @@ export default function Page() {
         </button>
         <div className="nav-bottom">
           <span>Estratégia atual</span>
-          <strong>Primeiro projeto pago, escopo fechado.</strong>
-          <p>Copie a mensagem, envie manualmente e registre o resultado.</p>
+          <strong>Da pesquisa ao site publicado.</strong>
+          <p>Qualifique, aborde, crie a prévia e acompanhe o fechamento.</p>
         </div>
       </aside>
       <main className="main">
@@ -341,16 +350,18 @@ export default function Page() {
             <div className="eyebrow">OPERAÇÃO COMERCIAL · OUTUBRO 2026</div>
             <h1>
               {tab === 'fila'
-                ? 'Agências para prospectar'
+                ? 'Empresas para prospectar'
                 : tab === 'dashboard'
                   ? 'Visão geral do negócio'
                 : tab === 'pesquisa'
-                  ? 'Pesquisa de agências'
+                  ? 'Pesquisa de empresas'
+                  : tab === 'previews'
+                    ? 'Criação de prévias'
                   : tab === 'followups'
                     ? 'Conversas para retomar'
                     : tab === 'clientes'
                       ? 'Clientes e finanças'
-                    : 'Oferta e abordagem'}
+                      : 'Oferta e abordagem'}
             </h1>
             <p>
               {tab === 'fila'
@@ -358,7 +369,9 @@ export default function Page() {
                 : tab === 'dashboard'
                   ? 'Prospecção, carteira de clientes e saúde financeira em um só lugar.'
                 : tab === 'pesquisa'
-                  ? 'Monte novos lotes por região sem precisar pedir uma lista no chat.'
+                  ? 'Encontre negócios por nicho e região para montar sua fila.'
+                  : tab === 'previews'
+                    ? 'Monte, edite, publique e envie sites demonstrativos em poucos passos.'
                   : tab === 'followups'
                     ? 'Próximas ações organizadas por data.'
                     : tab === 'clientes'
@@ -383,7 +396,7 @@ export default function Page() {
                 setShowAdd(true);
               }}
             >
-              <Plus size={17} /> {tab === 'clientes' ? 'Novo cliente' : 'Nova agência'}
+              <Plus size={17} /> {tab === 'clientes' ? 'Novo cliente' : 'Nova empresa'}
             </button>
           </div>
         </header>
@@ -404,7 +417,7 @@ export default function Page() {
         {tab !== 'dashboard' && tab !== 'clientes' && <div className="kpis">
           <div>
             <Users />
-            <span>Agências</span>
+            <span>Empresas</span>
             <strong>{m.total}</strong>
           </div>
           <div>
@@ -450,7 +463,7 @@ export default function Page() {
             </div>
             <section className="panel latest">
               <div className="panel-title"><div><small>MOVIMENTO RECENTE</small><h2>Últimos leads</h2></div><button className="text-button" onClick={() => setTab('clientes')}>Gerenciar clientes →</button></div>
-              <div className="simple-table"><div className="simple-row head"><span>Agência</span><span>Etapa</span><span>Cidade</span><span>Oportunidade</span></div>{data.leads.slice(0,5).map((lead) => <button className="simple-row" key={lead.id} onClick={() => setSelectedId(lead.id)}><strong>{lead.clinic}</strong><span><i className="status-dot" />{cleanStage(lead.stage)}</span><span>{lead.location}</span><span>{lead.site_issue}</span></button>)}</div>
+              <div className="simple-table"><div className="simple-row head"><span>Empresa</span><span>Etapa</span><span>Cidade</span><span>Oportunidade</span></div>{data.leads.slice(0,5).map((lead) => <button className="simple-row" key={lead.id} onClick={() => setSelectedId(lead.id)}><strong>{lead.clinic}</strong><span><i className="status-dot" />{cleanStage(lead.stage)}</span><span>{lead.location}</span><span>{lead.site_issue}</span></button>)}</div>
             </section>
           </div>
         )}
@@ -493,7 +506,7 @@ export default function Page() {
                       <small>LOTE {String(index + 1).padStart(2, '0')}</small>
                       <strong>{name}</strong>
                       <span>
-                        {count} agência{count === 1 ? '' : 's'}
+                        {count} empresa{count === 1 ? '' : 's'}
                       </span>
                       <i>
                         <em style={{ width: `${Math.min(100, count * 2)}%` }} />
@@ -504,7 +517,7 @@ export default function Page() {
               </div>
               <p>
                 “Pesquisada” indica um candidato ainda não conferido. Confirme
-                agência, localização e contato antes de marcar como pronta.{' '}
+                empresa, localização e contato antes de marcar como pronta.{' '}
                 <button
                   className="inline-research"
                   onClick={() => setTab('pesquisa')}
@@ -517,14 +530,14 @@ export default function Page() {
               <div>
                 <h2>Fila de prospecção · {city}</h2>
                 <p>
-                  Priorize agências com serviços compatíveis. Confirme o canal e
+                  Priorize empresas sem site ou com presença digital fraca. Confirme o canal e
                   personalize antes de enviar.
                 </p>
               </div>
               <div className="search">
                 <Search size={18} />
                 <input
-                  placeholder="Buscar agência ou serviço"
+                  placeholder="Buscar empresa ou serviço"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -595,7 +608,7 @@ export default function Page() {
               ))}
               {!visible.length && (
                 <div className="empty">
-                  Nenhuma agência neste filtro. Pesquise ou adicione contatos
+                  Nenhuma empresa neste filtro. Pesquise ou adicione contatos
                   nesta região.
                 </div>
               )}
@@ -610,9 +623,12 @@ export default function Page() {
               setQuery('');
               setFilter('A abordar');
               setTab('fila');
-              notify('Agências importadas para a fila de prospecção.');
+              notify('Empresas importadas para a fila de prospecção.');
             }}
           />
+        )}
+        {tab === 'previews' && (
+          <PreviewStudio leads={data.leads} previews={data.previews} busy={busy} save={post} copy={copy} />
         )}
         {tab === 'followups' && (
           <div className="follow-layout">
@@ -645,7 +661,7 @@ export default function Page() {
                       className="primary"
                       onClick={() => setSelectedId(lead.id)}
                     >
-                      Abrir agência
+                      Abrir empresa
                     </button>
                   </div>
                 </article>
@@ -666,7 +682,7 @@ export default function Page() {
           <div className="guide">
             <section className="guide-hero">
               <span>OFERTA DE ENTRADA</span>
-              <h2>Reforço de produção para agências</h2>
+              <h2>Sites rápidos para negócios locais</h2>
               <p>
                 Criativos, landing pages ou uma automação delimitada. Primeiro
                 projeto pago, prazo e entregáveis definidos antes de começar.
@@ -728,7 +744,7 @@ export default function Page() {
           <aside className="drawer">
             <div className="drawer-head">
               <div>
-                <small>AGÊNCIA · {cleanStage(selected.stage)}</small>
+                <small>EMPRESA · {cleanStage(selected.stage)}</small>
                 <h2>{selected.clinic}</h2>
                 <p>{selected.location}</p>
               </div>
@@ -755,7 +771,7 @@ export default function Page() {
                 </button>
               </div>
               <div className="detail-block">
-                <span>2. SE RESPONDEREM, APRESENTE O APOIO</span>
+                <span>2. SE ACEITAREM, CONFIRME A PRÉVIA</span>
                 <blockquote style={{ whiteSpace: 'pre-line' }}>
                   {replyMessage}
                 </blockquote>
@@ -900,19 +916,22 @@ export default function Page() {
                   )}
                   {selected.stage === '04 RESPONDEU' && (
                     <button
-                      onClick={() => action(selected, 'demand')}
+                      onClick={async () => {
+                        if (await post({ type: 'preview_create', id: selected.id })) {
+                          setSelectedId(null);
+                          setTab('previews');
+                        }
+                      }}
                       disabled={busy}
                     >
-                      Demanda identificada
+                      Aceitou — criar prévia
                     </button>
                   )}
                   {selected.stage === '05 DEMANDA IDENTIFICADA' && (
-                    <button
-                      onClick={() => action(selected, 'proposal')}
-                      disabled={busy}
-                    >
-                      Proposta enviada
-                    </button>
+                    <>
+                      <button onClick={() => { setSelectedId(null); setTab('previews'); }}>Abrir prévia</button>
+                      <button onClick={() => action(selected, 'proposal')} disabled={busy}>Proposta enviada</button>
+                    </>
                   )}
                   {selected.stage === '06 PROPOSTA ENVIADA' && (
                     <div className="sale">
@@ -1050,7 +1069,7 @@ export default function Page() {
             <div className="drawer-head">
               <div>
                 <small>NOVO CONTATO</small>
-                <h2>Adicionar agência</h2>
+                <h2>Adicionar empresa</h2>
               </div>
               <button aria-label="Fechar" onClick={() => setShowAdd(false)}>
                 <X />
@@ -1063,12 +1082,12 @@ export default function Page() {
               </p>
               {(
                 [
-                  ['name', 'Nome da agência *'],
+                  ['name', 'Nome da empresa *'],
                   ['city', 'Cidade'],
                   ['state', 'UF'],
                   ['contact', 'Link público de contato (https://)'],
                   ['email', 'E-mail público'],
-                  ['focus', 'Serviços da agência'],
+                  ['focus', 'Serviços da empresa'],
                   ['opportunity', 'Onde podemos ajudar'],
                 ] as const
               ).map(([key, label]) => (

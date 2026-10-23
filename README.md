@@ -1,6 +1,6 @@
 # Fluxa CRM
 
-CRM full-stack criado para organizar prospecção comercial, relacionamento com leads, follow-ups, clientes, serviços e indicadores financeiros em uma única aplicação.
+CRM full-stack criado para encontrar negócios locais, organizar a prospecção, abordar contatos pelo WhatsApp e gerar prévias editáveis de sites antes da venda.
 
 ![Dashboard do Fluxa CRM](public/dashboard-fluxa.png)
 
@@ -12,9 +12,13 @@ O Fluxa transforma uma lista de oportunidades em um processo comercial rastreáv
 
 - Dashboard executivo com receita mensal, clientes ativos, leads e valores a receber
 - Funil comercial da pesquisa ao fechamento
-- Pesquisa e importação de agências por região
+- Pesquisa e importação de empresas por nicho, cidade e região
 - Fila de prospecção com prioridade, estágio e abordagem personalizada
 - Atalhos para WhatsApp e canais públicos de contato
+- Mensagem de permissão antes de criar a demonstração
+- Gerador de prévias com estilos moderno, premium e marcante
+- Editor de textos, cores, serviços, capa e galeria
+- Link público exclusivo para cada prévia
 - Follow-ups automáticos por data
 - Histórico de eventos e notas por lead
 - Cadastro de clientes ativos e inativos
@@ -26,7 +30,13 @@ O Fluxa transforma uma lista de oportunidades em um processo comercial rastreáv
 
 ![Área de prospecção](public/prospeccao-fluxa.png)
 
-Cada oportunidade possui estágio, contexto comercial, canal de contato, mensagem inicial, notas e histórico. O sistema não dispara mensagens de forma não oficial: ele apoia uma abordagem manual, personalizada e auditável.
+Cada oportunidade possui estágio, contexto comercial, canal de contato, mensagem inicial, notas e histórico. O sistema abre o `wa.me` com uma abordagem personalizada e mantém o envio sob controle do usuário, sem depender de disparos não oficiais.
+
+## Prévias de sites
+
+Depois que a empresa aceita receber uma demonstração, o Fluxa gera um primeiro site em segundos usando componentes responsivos. O usuário pode trocar o estilo visual, editar todo o conteúdo, selecionar imagens e publicar uma URL exclusiva para enviar ao potencial cliente.
+
+O fluxo implementado é: pesquisa → qualificação → WhatsApp → aceite → prévia → proposta → venda.
 
 ## Clientes e finanças
 
@@ -42,6 +52,25 @@ O módulo financeiro conecta a execução comercial à carteira conquistada. Cad
 - Drizzle ORM
 - Tailwind CSS
 - Lucide Icons
+- OpenStreetMap / Overpass para pesquisa gratuita de negócios locais
+- Google Maps assistido para complementar e importar leads sem API paga
+
+## Pesquisa de empresas sem custo
+
+Por padrão, o Fluxa consulta dados abertos do OpenStreetMap por servidores
+Overpass e não exige cartão, conta de cobrança ou chave de API. Quando a
+cobertura estiver incompleta, a interface abre uma busca pronta no Google Maps
+e aceita a importação dos dados selecionados pelo usuário.
+
+O código também possui integração opcional com a **Places API (New)** para uma
+evolução futura. Essa opção exige faturamento no Google Cloud e não é usada no
+modo gratuito:
+
+```env
+GOOGLE_PLACES_API_KEY=sua_chave
+```
+
+A chave é usada somente no servidor. Ela não deve ser adicionada ao frontend nem publicada no repositório.
 
 ## Arquitetura
 
