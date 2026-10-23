@@ -240,9 +240,9 @@ export default function ResearchPanel({
         <span>PESQUISA QUALIFICADA · ZERO CUSTO</span>
         <h2>Encontrar empresas qualificadas</h2>
         <p>
-          Escolha a região e o nicho. O Fluxa abre a busca pronta no Google
-          Maps, recebe o CSV do Instant Data Scraper e transforma os resultados
-          em leads qualificados sem API paga.
+          Escolha a região, o nicho e a quantidade. Com o complemento conectado,
+          um clique pesquisa no Google Maps e transforma os resultados em leads
+          qualificados dentro do CRM, sem seleção ou importação manual.
         </p>
       </div>
       <div className="research-form">
