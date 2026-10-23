@@ -9,9 +9,17 @@ export const secondMessage =
 export const positiveReplyMessage =
   'Boa! 😁 Vou preparar uma prévia personalizada pra vocês verem o site funcionando.\n\nÉ grátis e sem compromisso!\n\nAssim que ficar pronta, te mando o link! 🚀';
 
-export function whatsappLink(phone?: string): string {
+export function whatsappLink(phone?: string, message?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   const national =
-    digits.startsWith('55') && digits.length === 13 ? digits.slice(2) : digits;
-  return /^\d{2}9\d{8}$/.test(national) ? `https://wa.me/55${national}` : '';
+    digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
+      ? digits.slice(2)
+      : digits;
+
+  if (!/^\d{10,11}$/.test(national)) return '';
+
+  const text = message?.trim()
+    ? `?text=${encodeURIComponent(message.trim())}`
+    : '';
+  return `https://wa.me/55${national}${text}`;
 }

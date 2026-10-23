@@ -607,14 +607,14 @@ export default function Page() {
                     <strong>{lead.site_issue}</strong>
                   </div>
                   <div className="card-actions">
-                    {whatsappLink(lead.phone) && (
+                    {whatsappLink(lead.phone, firstMessage(lead)) && (
                       <a
                         className="whatsapp-card-link"
-                        href={whatsappLink(lead.phone)}
+                        href={whatsappLink(lead.phone, firstMessage(lead))}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        <MessageCircle size={16} /> WhatsApp
+                        <MessageCircle size={16} /> Enviar no WhatsApp
                       </a>
                     )}
                     <button
@@ -823,14 +823,14 @@ export default function Page() {
                 </button>
               </div>
               <div className="contact-actions">
-                {whatsappLink(selected.phone) && (
+                {whatsappLink(selected.phone, firstMessage(selected)) && (
                   <>
                     <a
-                      href={whatsappLink(selected.phone)}
+                      href={whatsappLink(selected.phone, firstMessage(selected))}
                       target="_blank"
                       rel="noreferrer"
                     >
-                      <MessageCircle size={17} /> Abrir WhatsApp
+                      <MessageCircle size={17} /> Enviar primeira mensagem no WhatsApp
                     </a>
                     <button
                       onClick={() =>
@@ -868,7 +868,7 @@ export default function Page() {
                   </button>
                 )}
               </div>
-              {!whatsappLink(selected.phone) && (
+              {!whatsappLink(selected.phone, firstMessage(selected)) && (
                 <p className="hint">
                   Sem link direto: adicione abaixo um celular público com DDD
                   para gerar o wa.me.
