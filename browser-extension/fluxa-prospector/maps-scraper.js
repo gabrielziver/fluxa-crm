@@ -23,6 +23,25 @@ function scrapeArticle(article) {
   return { name, mapUrl, address, category, image, phone, rating, reviewCount };
 }
 
+function scrapePlace() {
+  const websiteLink = document.querySelector('a[data-item-id="authority"], a[aria-label^="Site:"], a[data-tooltip*="site" i]');
+  const phoneButton = document.querySelector('button[data-item-id^="phone:tel:"], button[aria-label^="Telefone:"]');
+  const addressButton = document.querySelector('button[data-item-id="address"], button[aria-label^="Endereço:"]');
+  const categoryButton = document.querySelector('button[jsaction*="category"]');
+  const website = websiteLink?.href || '';
+  const phone = (phoneButton?.getAttribute('data-item-id') || phoneButton?.getAttribute('aria-label') || '')
+    .replace(/^phone:tel:/, '')
+    .replace(/^Telefone:\s*/i, '')
+    .trim();
+  const address = (addressButton?.getAttribute('aria-label') || '')
+    .replace(/^Endereço:\s*/i, '')
+    .trim();
+  const category = categoryButton?.textContent?.trim() || '';
+  const heading = document.querySelector('h1.DUwDvf, h1');
+  const detailLoaded = Boolean(heading && (addressButton || phoneButton || websiteLink));
+  return { website, phone, address, category, websiteVerified: detailLoaded };
+}
+
 async function collect(limit) {
   const feed = document.querySelector('[role="feed"]');
   if (!feed) throw new Error('A lista de resultados do Google Maps não apareceu. Tente outra cidade ou nicho.');
@@ -51,9 +70,15 @@ async function collect(limit) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== 'FLUXA_SCRAPE_MAPS') return false;
-  collect(Math.min(60, Math.max(1, Number(message.limit || 30))))
-    .then((rows) => sendResponse({ ok: true, rows }))
-    .catch((error) => sendResponse({ ok: false, error: error.message || 'Falha ao ler o Google Maps.' }));
-  return true;
+  if (message?.type === 'FLUXA_SCRAPE_PLACE') {
+    sendResponse({ ok: true, details: scrapePlace() });
+    return false;
+  }
+  if (message?.type === 'FLUXA_SCRAPE_MAPS') {
+    collect(Math.min(90, Math.max(1, Number(message.limit || 30))))
+      .then((rows) => sendResponse({ ok: true, rows }))
+      .catch((error) => sendResponse({ ok: false, error: error.message || 'Falha ao ler o Google Maps.' }));
+    return true;
+  }
+  return false;
 });

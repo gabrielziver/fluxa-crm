@@ -159,7 +159,12 @@ export default function ResearchPanel({
     window.postMessage({
       type: 'FLUXA_SEARCH_REQUEST',
       requestId,
-      payload: { query: mapsQuery, limit: Math.min(60, Math.max(1, limit)) },
+      payload: {
+        query: mapsQuery,
+        category: categoryLabel[category] || 'negócio local',
+        limit: Math.min(60, Math.max(1, limit)),
+        onlyWithoutWebsite: true,
+      },
     }, window.location.origin);
   };
   const importPasted = async () => {
@@ -241,8 +246,8 @@ export default function ResearchPanel({
         <h2>Encontrar empresas qualificadas</h2>
         <p>
           Escolha a região, o nicho e a quantidade. Com o complemento conectado,
-          um clique pesquisa no Google Maps e transforma os resultados em leads
-          qualificados dentro do CRM, sem seleção ou importação manual.
+          um clique pesquisa no Google Maps, verifica a ficha de cada empresa e
+          importa somente negócios sem site confirmado.
         </p>
       </div>
       <div className="research-form">
@@ -297,7 +302,7 @@ export default function ResearchPanel({
       </div>
       <p className="research-note">
         {extensionReady
-          ? 'Complemento Fluxa Prospector conectado. A pesquisa e a importação acontecem em um clique.'
+          ? 'Complemento conectado. O Fluxa verifica o campo “Site” de cada ficha antes de importar; a pesquisa pode levar alguns segundos.'
           : 'Para a pesquisa realmente automática e sem API paga, instale uma única vez o complemento Fluxa Prospector no Brave.'}
       </p>
       {error && <div className="research-error">{error}</div>}
@@ -308,9 +313,9 @@ export default function ResearchPanel({
           <h3>Ativar a pesquisa automática</h3>
           <p>
             O complemento abre o Google Maps em segundo plano, percorre os
-            resultados públicos e devolve tudo organizado ao Fluxa. Ele limita
-            cada pesquisa a 60 empresas, usa pausas entre as rolagens e não
-            tenta contornar bloqueios ou verificações do Google.
+            resultados e confere individualmente se existe um site oficial. Só
+            entram no CRM empresas em que a ficha foi verificada e nenhum site
+            foi encontrado. Ele usa pausas e não contorna bloqueios do Google.
           </p>
         </div>
         <a href="/fluxa-prospector-extension.zip" download>

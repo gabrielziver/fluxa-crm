@@ -1,8 +1,8 @@
 # Fluxa Prospector
 
 Complemento local do Brave/Chrome que conecta o botão de pesquisa do Fluxa ao
-Google Maps. Ele abre uma aba em segundo plano, percorre até 60 resultados
-visíveis e devolve os registros para o CRM.
+Google Maps. Ele abre abas em segundo plano, percorre os resultados, verifica a
+ficha de cada empresa e devolve ao CRM somente negócios sem site confirmado.
 
 ## Instalação no Brave
 
