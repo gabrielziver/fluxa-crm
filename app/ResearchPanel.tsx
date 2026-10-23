@@ -1,34 +1,7 @@
 'use client';
 /* oxlint-disable typescript/no-explicit-any */
 import { useState } from 'react';
-import { ArrowUpRight, Check, Search, UploadCloud } from 'lucide-react';
-
-type Candidate = {
-  id: string;
-  name: string;
-  city: string;
-  state: string;
-  category: string;
-  website: string;
-  email: string;
-  phone: string;
-  osmUrl: string;
-  address: string;
-  rating?: number;
-  reviewCount?: number;
-  hasWebsite?: boolean;
-};
-type SearchResult = {
-  candidates: Candidate[];
-  found: number;
-  alreadyInCrm: number;
-  requested: number;
-  city: string;
-  state: string;
-  location: string;
-  provider: string;
-  attribution: string;
-};
+import { ArrowUpRight, Search, UploadCloud } from 'lucide-react';
 const STATES = [
   'AC',
   'AL',
@@ -58,6 +31,62 @@ const STATES = [
   'SE',
   'TO',
 ];
+
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      row.push(field.trim());
+      field = '';
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(field.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      field = '';
+    } else field += char;
+  }
+  row.push(field.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+
+function instantDataRows(text: string) {
+  const table = parseCsv(text);
+  if (table.length < 2) return [];
+  const header = table[0];
+  const mapIndex = Math.max(0, header.findIndex((value) => /href/i.test(value)));
+  const nameIndex = header.findIndex((value) => /xxVWCe/i.test(value));
+  const ratingIndex = header.findIndex((value) => /MW4etd/i.test(value));
+  const reviewsIndex = header.findIndex((value) => /UY7F9/i.test(value));
+  const categoryIndex = header.findIndex((value) => /^W4Efsd$/i.test(value));
+  return table.slice(1).map((cells) => {
+    const mapUrl = cells[mapIndex] || cells.find((value) => /google\.com\/maps\/place/i.test(value)) || '';
+    const name = (nameIndex >= 0 ? cells[nameIndex] : cells[mapIndex + 1]) || '';
+    const address = cells.find((value) => /^(?:R\.|Rua|Av\.|Avenida|Alameda|Travessa|Estrada|Rodovia|Praça)\s/i.test(value)) || '';
+    const image = cells.find((value) => /^https?:\/\/(?:lh3\.googleusercontent|streetviewpixels-pa\.googleapis)\.com/i.test(value)) || '';
+    const rating = Number(((ratingIndex >= 0 ? cells[ratingIndex] : '') || '').replace(',', '.')) || 0;
+    const reviewCount = Number(((reviewsIndex >= 0 ? cells[reviewsIndex] : '') || '').replace(/\D/g, '')) || 0;
+    return {
+      name,
+      mapUrl,
+      address,
+      image,
+      rating,
+      reviewCount,
+      category: (categoryIndex >= 0 ? cells[categoryIndex] : '') || 'negócio local',
+    };
+  }).filter((row) => row.name && row.mapUrl.includes('google.com/maps/'));
+}
 export default function ResearchPanel({
   onImported,
 }: {
@@ -67,12 +96,11 @@ export default function ResearchPanel({
     [state, setState] = useState('PR'),
     [category, setCategory] = useState('todas'),
     [limit, setLimit] = useState(50),
-    [result, setResult] = useState<SearchResult | null>(null),
-    [selected, setSelected] = useState<Set<string>>(new Set()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [message, setMessage] = useState(''),
-    [pasted, setPasted] = useState('');
+    [pasted, setPasted] = useState(''),
+    [scraperFile, setScraperFile] = useState('');
   const categoryLabel: Record<string,string> = { todas:'empresas locais', restaurante:'restaurantes', barbearia:'barbearias', beleza:'salões de beleza', clinica:'clínicas', academia:'academias' };
   const mapsQuery = `${categoryLabel[category] || 'empresas locais'} em ${city.trim() || state} ${city.trim() ? state : ''}`;
   const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}`;
@@ -86,53 +114,6 @@ export default function ResearchPanel({
     if (!response.ok)
       throw new Error(json.error || 'Não foi possível pesquisar.');
     return json;
-  };
-  const search = async () => {
-    setBusy(true);
-    setError('');
-    setMessage('');
-    setResult(null);
-    try {
-      const found = await request({
-        action: 'search',
-        city: city.trim(),
-        state,
-        category,
-        limit,
-      });
-      setResult(found);
-      setSelected(
-        new Set(found.candidates.map((candidate: Candidate) => candidate.id)),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha na pesquisa.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  const importSelected = async () => {
-    if (!result) return;
-    setBusy(true);
-    setError('');
-    try {
-      const candidates = result.candidates.filter((candidate) =>
-        selected.has(candidate.id),
-      );
-      const imported = await request({
-        action: 'import',
-        city: result.city,
-        state: result.state,
-        candidates,
-      });
-      setMessage(
-        `${imported.imported} empresa(s) adicionada(s) à fila ${result.location}.`,
-      );
-      onImported(imported.data, result.location);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao importar.');
-    } finally {
-      setBusy(false);
-    }
   };
   const importPasted = async () => {
     setError('');
@@ -181,22 +162,40 @@ export default function ResearchPanel({
       setBusy(false);
     }
   };
-  const toggle = (id: string) =>
-    setSelected((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const importScraperCsv = async (file: File) => {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    setScraperFile(file.name);
+    try {
+      const rows = instantDataRows(await file.text());
+      if (!rows.length)
+        throw new Error('Não encontrei empresas nesse CSV. No Instant Data Scraper, clique em “Try another table” até aparecer a tabela com os nomes e links do Google Maps.');
+      if (rows.length > 100)
+        throw new Error('O arquivo tem mais de 100 empresas. Exporte ou divida em lotes de até 100.');
+      const imported = await request({
+        action: 'import_pasted',
+        city: city.trim(),
+        state,
+        rows,
+      });
+      setMessage(`${imported.imported} empresa(s) do Instant Data Scraper adicionada(s) à fila ${imported.location}.`);
+      onImported(imported.data, imported.location);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao importar o CSV.');
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="research">
       <div className="research-intro">
         <span>PESQUISA QUALIFICADA · ZERO CUSTO</span>
         <h2>Encontrar empresas qualificadas</h2>
         <p>
-          Escolha a região e o nicho. O Fluxa pesquisa gratuitamente em dados
-          abertos do mapa e permite complementar a lista pelo Google Maps sem
-          chave paga. Revise os resultados antes de importá-los.
+          Escolha a região e o nicho. O Fluxa abre a busca pronta no Google
+          Maps, recebe o CSV do Instant Data Scraper e transforma os resultados
+          em leads qualificados sem API paga.
         </p>
       </div>
       <div className="research-form">
@@ -242,126 +241,72 @@ export default function ResearchPanel({
         </label>
         <button
           className="primary"
-          disabled={busy || !state || limit < 1 || limit > 60}
-          onClick={search}
+          disabled={!state || limit < 1 || limit > 60}
+          onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
         >
           <Search size={16} />
-          {busy ? 'Pesquisando…' : 'Pesquisar gratuitamente'}
+          Abrir pesquisa para o scraper
         </button>
       </div>
       <p className="research-note">
-        A busca automática usa OpenStreetMap e servidores públicos Overpass.
-        Não exige cartão. O Fluxa não dispara mensagens: ele qualifica o
-        contato e abre o WhatsApp para uma abordagem revisada.
+        No Google Maps, abra o Instant Data Scraper, clique em “Try another
+        table” até aparecerem os nomes das empresas, use “Start crawling” e
+        exporte em CSV. Depois importe o arquivo abaixo.
       </p>
       {error && <div className="research-error">{error}</div>}
       {message && <div className="research-message">{message}</div>}
       <section className="manual-research">
         <div>
-          <span>GOOGLE MAPS ASSISTIDO · SEM API</span>
-          <h3>Complementar a pesquisa no Google Maps</h3>
+          <span>INSTANT DATA SCRAPER · SEM API PAGA</span>
+          <h3>Pesquisar dezenas de empresas de uma vez</h3>
           <p>
-            Abra o mapa com a cidade e o nicho preenchidos, escolha empresas e
-            cole os dados abaixo. Você pode usar uma linha com barras ou colar
-            um bloco por empresa, separando as empresas por uma linha vazia. O
-            CRM organiza por região e elimina nomes repetidos.
+            Abra a pesquisa pronta, execute o Instant Data Scraper, escolha a
+            tabela que contém nomes e links das empresas e exporte em CSV. O
+            Fluxa reconhece nota, avaliações, categoria, endereço e link do
+            Google Maps e elimina empresas repetidas.
           </p>
         </div>
         <a href={mapsUrl} target="_blank" rel="noreferrer">
           <ArrowUpRight size={16} /> Abrir busca no Google Maps
         </a>
-        <label>
-          Uma empresa por linha:{' '}
-          <code>
-            Nome | https://site-ou-contato | email@empresa.com | telefone
-          </code>
-          <textarea
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-            placeholder={
-              'Empresa Exemplo | https://exemplo.com.br | contato@exemplo.com.br | (41) 99999-9999\nOutra Empresa | https://outra.com.br'
-            }
+        <label className="scraper-upload">
+          <strong>Importar CSV do Instant Data Scraper</strong>
+          <small>{scraperFile || 'Selecione o arquivo CSV exportado pela extensão'}</small>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            disabled={busy}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importScraperCsv(file);
+              event.currentTarget.value = '';
+            }}
           />
         </label>
-        <button
-          className="outline"
-          disabled={busy || !pasted.trim()}
-          onClick={importPasted}
-        >
-          <UploadCloud size={16} /> Importar lista colada
-        </button>
+        <details>
+          <summary>Importação alternativa por texto</summary>
+          <label>
+            Uma empresa por linha:{' '}
+            <code>
+              Nome | https://site-ou-contato | email@empresa.com | telefone
+            </code>
+            <textarea
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              placeholder={
+                'Empresa Exemplo | https://exemplo.com.br | contato@exemplo.com.br | (41) 99999-9999\nOutra Empresa | https://outra.com.br'
+              }
+            />
+          </label>
+          <button
+            className="outline"
+            disabled={busy || !pasted.trim()}
+            onClick={importPasted}
+          >
+            <UploadCloud size={16} /> Importar lista colada
+          </button>
+        </details>
       </section>
-      {result && (
-        <>
-          <div className="research-results-head">
-            <div>
-              <h3>{result.location}</h3>
-              <p>
-                {result.candidates.length} nova(s) empresa(s) encontrada(s) para
-                uma meta de {result.requested}. {result.found} registro(s)
-                relevantes no mapa antes de retirar duplicatas. Fonte:{' '}
-                {result.provider}.
-              </p>
-            </div>
-            <button
-              className="primary"
-              disabled={busy || !selected.size}
-              onClick={importSelected}
-            >
-              <UploadCloud size={16} /> Importar {selected.size} para prospecção
-            </button>
-          </div>
-          {result.candidates.length ? (
-            <div className="research-list">
-              {result.candidates.map((candidate) => (
-                <article key={candidate.id}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(candidate.id)}
-                      onChange={() => toggle(candidate.id)}
-                    />
-                    <span>
-                      <strong>{candidate.name}</strong>
-                      <small>
-                        {candidate.address || result.location} ·{' '}
-                        {candidate.category.replaceAll('_', ' ')}
-                      </small>
-                      <small className="candidate-signals">
-                        {(candidate.hasWebsite ?? Boolean(candidate.website)) ? 'Com site' : 'Sem site'} · {candidate.rating ? `★ ${candidate.rating.toFixed(1)}` : 'Sem nota'} · {candidate.reviewCount || 0} avaliações
-                      </small>
-                      <small>
-                        {candidate.website ||
-                          candidate.email ||
-                          candidate.phone ||
-                          'Sem contato cadastrado — verificar manualmente'}
-                      </small>
-                    </span>
-                  </label>
-                  <a
-                    href={candidate.osmUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`Ver ${candidate.name} no mapa`}
-                  >
-                    <ArrowUpRight size={17} />
-                  </a>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="empty">
-              <Check size={20} />
-              <strong>Nenhuma empresa nova nesta busca.</strong>
-              <p>
-                Tente outra categoria ou cidade. A cobertura do mapa pode ser
-                limitada.
-              </p>
-            </div>
-          )}
-          <p className="research-credit">{result.attribution}</p>
-        </>
-      )}
     </div>
   );
 }

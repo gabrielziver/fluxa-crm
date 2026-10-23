@@ -53,14 +53,16 @@ O módulo financeiro conecta a execução comercial à carteira conquistada. Cad
 - Tailwind CSS
 - Lucide Icons
 - OpenStreetMap / Overpass para pesquisa gratuita de negócios locais
-- Google Maps assistido para complementar e importar leads sem API paga
+- Google Maps + Instant Data Scraper para importar leads em massa sem API paga
 
 ## Pesquisa de empresas sem custo
 
 Por padrão, o Fluxa consulta dados abertos do OpenStreetMap por servidores
 Overpass e não exige cartão, conta de cobrança ou chave de API. Quando a
 cobertura estiver incompleta, a interface abre uma busca pronta no Google Maps
-e aceita a importação dos dados selecionados pelo usuário.
+e aceita diretamente o CSV exportado pela extensão Instant Data Scraper. O
+importador reconhece nome, endereço, categoria, nota, avaliações, imagem e link
+do estabelecimento, além de remover duplicatas antes da prospecção.
 
 O código também possui integração opcional com a **Places API (New)** para uma
 evolução futura. Essa opção exige faturamento no Google Cloud e não é usada no

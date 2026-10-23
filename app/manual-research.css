@@ -7,3 +7,4 @@
 .manual-research code{font-size:10px;color:#6e8090;font-weight:500}
 .manual-research textarea{width:100%;min-height:112px;border:1px solid #d7e1e8;border-radius:9px;padding:11px;font-size:12px;resize:vertical}
 .manual-research button{justify-self:start}
+.scraper-upload{border:1px dashed #a9cdd0;border-radius:10px;padding:14px;background:#f4fbfb;cursor:pointer;max-width:520px}.scraper-upload strong{font-size:12px;color:#173c4a}.scraper-upload small{font-size:10px;color:#6e8090}.scraper-upload input{font-size:11px;color:#53677c}.manual-research details{display:grid;gap:10px;border-top:1px solid #e7edef;padding-top:12px}.manual-research details[open]{gap:10px}.manual-research summary{font-size:11px;font-weight:750;color:#607484;cursor:pointer;margin-bottom:10px}.manual-research details label,.manual-research details button{margin-top:10px}

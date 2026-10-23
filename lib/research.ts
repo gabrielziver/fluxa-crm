@@ -408,7 +408,18 @@ export async function importAgencies(input: {
 export async function importPastedAgencies(input: {
   city?: string;
   state?: string;
-  rows?: { name?: string; contact?: string; email?: string; phone?: string }[];
+  rows?: {
+    name?: string;
+    contact?: string;
+    email?: string;
+    phone?: string;
+    mapUrl?: string;
+    address?: string;
+    category?: string;
+    image?: string;
+    rating?: number;
+    reviewCount?: number;
+  }[];
 }) {
   const { city, state } = validate({
     city: input.city,
@@ -443,11 +454,20 @@ export async function importPastedAgencies(input: {
     if (!name || names.has(normalize(name))) continue;
     names.add(normalize(name));
     const contact = cleanUrl(row.contact);
+    const mapUrl = cleanUrl(row.mapUrl);
     const email = safeText(row.email, 120);
     const phone = safeText(row.phone, 50);
     if (row.contact && !contact)
       throw new Error(`Link inválido para ${name}. Use https://.`);
+    if (row.mapUrl && (!mapUrl || !new URL(mapUrl).hostname.endsWith('google.com')))
+      throw new Error(`Link do Google Maps inválido para ${name}.`);
     const opening = initialMessage(city);
+    const rating = Math.min(5, Math.max(0, Number(row.rating || 0)));
+    const reviewCount = Math.max(0, Math.round(Number(row.reviewCount || 0)));
+    const category = safeText(row.category, 80) || 'negócio local (confirmar serviços)';
+    const address = safeText(row.address, 120) || '—';
+    const image = cleanUrl(row.image);
+    const score = Math.min(4, 1 + Number(Boolean(mapUrl)) + Number(reviewCount >= 20) + Number(rating >= 4.5));
     inserts.push(
       db
         .prepare(
@@ -459,33 +479,27 @@ export async function importPastedAgencies(input: {
           name,
           location,
           city || STATES[state],
-          '—',
+          address,
           '01 PESQUISADA',
-          1,
-          'Importação manual — verificar dados',
-          'Nova',
+          score,
+          mapUrl ? `${rating ? `Nota ${rating.toFixed(1)}` : 'Sem nota'} · ${reviewCount} avaliações` : 'Importação manual — verificar dados',
+          score >= 4 ? 'Alta' : score >= 3 ? 'Média' : 'Nova',
           contact ? 'Verificar se o site pode ser melhorado.' : 'Empresa sem site informado.',
           contact ? 'Site existente — verificar oportunidade.' : 'Boa candidata para uma prévia gratuita.',
           email,
-          0,
-          0,
-          'negócio local (confirmar serviços)',
+          rating,
+          reviewCount,
+          category,
           phone,
           contact,
           'Possível cliente para criação de site; interesse ainda não confirmado.',
-          'Empresa importada pelo usuário; confirme a fonte, serviços, localização e canal antes de abordar.',
+          mapUrl ? 'Dados extraídos do Google Maps pelo Instant Data Scraper. Confirme telefone, site e canal antes de abordar.' : 'Empresa importada pelo usuário; confirme a fonte, serviços, localização e canal antes de abordar.',
           opening,
-          JSON.stringify(
-            contact
-              ? [
-                  {
-                    type: 'Link informado',
-                    url: contact,
-                    use: 'Verificar antes de abordar',
-                  },
-                ]
-              : [],
-          ),
+          JSON.stringify([
+            ...(mapUrl ? [{ type: 'Google Maps', url: mapUrl, use: 'Fonte do registro público' }] : []),
+            ...(contact ? [{ type: 'Link informado', url: contact, use: 'Verificar antes de abordar' }] : []),
+            ...(image ? [{ type: 'Imagem pública', url: image, use: 'Referência visual do negócio' }] : []),
+          ]),
           now,
           now,
         ),
