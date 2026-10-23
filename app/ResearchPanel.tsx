@@ -1,7 +1,7 @@
 'use client';
 /* oxlint-disable typescript/no-explicit-any */
-import { useState } from 'react';
-import { ArrowUpRight, Search, UploadCloud } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Download, Search, UploadCloud } from 'lucide-react';
 const STATES = [
   'AC',
   'AL',
@@ -100,10 +100,11 @@ export default function ResearchPanel({
     [error, setError] = useState(''),
     [message, setMessage] = useState(''),
     [pasted, setPasted] = useState(''),
-    [scraperFile, setScraperFile] = useState('');
+    [scraperFile, setScraperFile] = useState(''),
+    [extensionReady, setExtensionReady] = useState(false);
+  const activeRequest = useRef('');
   const categoryLabel: Record<string,string> = { todas:'empresas locais', restaurante:'restaurantes', barbearia:'barbearias', beleza:'salões de beleza', clinica:'clínicas', academia:'academias' };
   const mapsQuery = `${categoryLabel[category] || 'empresas locais'} em ${city.trim() || state} ${city.trim() ? state : ''}`;
-  const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mapsQuery)}`;
   const request = async (body: Record<string, unknown>): Promise<any> => {
     const response = await fetch('/api/crm/research', {
       method: 'POST',
@@ -114,6 +115,52 @@ export default function ResearchPanel({
     if (!response.ok)
       throw new Error(json.error || 'Não foi possível pesquisar.');
     return json;
+  };
+  const importAutomaticRows = async (rows: unknown[]) => {
+    const imported = await request({
+      action: 'import_pasted',
+      city: city.trim(),
+      state,
+      rows,
+    });
+    setMessage(`${imported.imported} empresa(s) encontradas e organizadas automaticamente na fila ${imported.location}.`);
+    onImported(imported.data, imported.location);
+  };
+  useEffect(() => {
+    const handleCompanion = (event: MessageEvent) => {
+      if (event.source !== window || !event.data || typeof event.data !== 'object') return;
+      if (event.data.type === 'FLUXA_COMPANION_READY') setExtensionReady(true);
+      if (event.data.type === 'FLUXA_SEARCH_RESULT' && event.data.requestId === activeRequest.current) {
+        activeRequest.current = '';
+        void importAutomaticRows(Array.isArray(event.data.rows) ? event.data.rows : [])
+          .catch((reason) => setError(reason instanceof Error ? reason.message : 'Falha ao importar resultados.'))
+          .finally(() => setBusy(false));
+      }
+      if (event.data.type === 'FLUXA_SEARCH_ERROR' && event.data.requestId === activeRequest.current) {
+        activeRequest.current = '';
+        setBusy(false);
+        setError(event.data.error || 'O complemento não conseguiu concluir a pesquisa.');
+      }
+    };
+    window.addEventListener('message', handleCompanion);
+    window.postMessage({ type: 'FLUXA_COMPANION_PING' }, window.location.origin);
+    return () => window.removeEventListener('message', handleCompanion);
+  }, [city, state]);
+  const automaticSearch = () => {
+    setError('');
+    setMessage('');
+    if (!extensionReady) {
+      setError('O complemento Fluxa Prospector ainda não está instalado ou ativado neste navegador. Baixe-o abaixo e faça a instalação única.');
+      return;
+    }
+    const requestId = crypto.randomUUID();
+    activeRequest.current = requestId;
+    setBusy(true);
+    window.postMessage({
+      type: 'FLUXA_SEARCH_REQUEST',
+      requestId,
+      payload: { query: mapsQuery, limit: Math.min(60, Math.max(1, limit)) },
+    }, window.location.origin);
   };
   const importPasted = async () => {
     setError('');
@@ -241,37 +288,40 @@ export default function ResearchPanel({
         </label>
         <button
           className="primary"
-          disabled={!state || limit < 1 || limit > 60}
-          onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
+          disabled={busy || !state || limit < 1 || limit > 60}
+          onClick={automaticSearch}
         >
           <Search size={16} />
-          Abrir pesquisa para o scraper
+          {busy ? 'Pesquisando e organizando…' : 'Pesquisar automaticamente'}
         </button>
       </div>
       <p className="research-note">
-        No Google Maps, abra o Instant Data Scraper, clique em “Try another
-        table” até aparecerem os nomes das empresas, use “Start crawling” e
-        exporte em CSV. Depois importe o arquivo abaixo.
+        {extensionReady
+          ? 'Complemento Fluxa Prospector conectado. A pesquisa e a importação acontecem em um clique.'
+          : 'Para a pesquisa realmente automática e sem API paga, instale uma única vez o complemento Fluxa Prospector no Brave.'}
       </p>
       {error && <div className="research-error">{error}</div>}
       {message && <div className="research-message">{message}</div>}
       <section className="manual-research">
         <div>
-          <span>INSTANT DATA SCRAPER · SEM API PAGA</span>
-          <h3>Pesquisar dezenas de empresas de uma vez</h3>
+          <span>COMPLEMENTO LOCAL · SEM API PAGA</span>
+          <h3>Ativar a pesquisa automática</h3>
           <p>
-            Abra a pesquisa pronta, execute o Instant Data Scraper, escolha a
-            tabela que contém nomes e links das empresas e exporte em CSV. O
-            Fluxa reconhece nota, avaliações, categoria, endereço e link do
-            Google Maps e elimina empresas repetidas.
+            O complemento abre o Google Maps em segundo plano, percorre os
+            resultados públicos e devolve tudo organizado ao Fluxa. Ele limita
+            cada pesquisa a 60 empresas, usa pausas entre as rolagens e não
+            tenta contornar bloqueios ou verificações do Google.
           </p>
         </div>
-        <a href={mapsUrl} target="_blank" rel="noreferrer">
-          <ArrowUpRight size={16} /> Abrir busca no Google Maps
+        <a href="/fluxa-prospector-extension.zip" download>
+          <Download size={16} /> Baixar complemento Fluxa Prospector
         </a>
+        <small className={`companion-status ${extensionReady ? 'connected' : ''}`}>
+          {extensionReady ? '● Complemento conectado' : '○ Complemento ainda não detectado'}
+        </small>
         <label className="scraper-upload">
-          <strong>Importar CSV do Instant Data Scraper</strong>
-          <small>{scraperFile || 'Selecione o arquivo CSV exportado pela extensão'}</small>
+          <strong>Plano B: importar CSV do Instant Data Scraper</strong>
+          <small>{scraperFile || 'Se preferir, o importador de CSV continua disponível'}</small>
           <input
             type="file"
             accept=".csv,text/csv"

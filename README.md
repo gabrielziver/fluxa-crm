@@ -54,6 +54,7 @@ O módulo financeiro conecta a execução comercial à carteira conquistada. Cad
 - Lucide Icons
 - OpenStreetMap / Overpass para pesquisa gratuita de negócios locais
 - Google Maps + Instant Data Scraper para importar leads em massa sem API paga
+- Complemento Fluxa Prospector para pesquisa automática em um clique no navegador
 
 ## Pesquisa de empresas sem custo
 
@@ -63,6 +64,12 @@ cobertura estiver incompleta, a interface abre uma busca pronta no Google Maps
 e aceita diretamente o CSV exportado pela extensão Instant Data Scraper. O
 importador reconhece nome, endereço, categoria, nota, avaliações, imagem e link
 do estabelecimento, além de remover duplicatas antes da prospecção.
+
+Para a experiência automática, instale o complemento local disponível em
+`browser-extension/fluxa-prospector`. Depois da instalação única no Brave ou
+Chrome, o botão **Pesquisar automaticamente** abre o Maps em segundo plano e
+devolve até 60 resultados diretamente ao CRM. O CSV do Instant Data Scraper
+continua disponível como contingência.
 
 O código também possui integração opcional com a **Places API (New)** para uma
 evolução futura. Essa opção exige faturamento no Google Cloud e não é usada no

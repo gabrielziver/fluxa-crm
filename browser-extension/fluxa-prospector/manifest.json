@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Fluxa Prospector",
+  "version": "1.0.0",
+  "description": "Conecta o Fluxa CRM ao Google Maps para organizar pesquisas locais no navegador.",
+  "permissions": ["tabs"],
+  "host_permissions": [
+    "https://www.google.com/maps/*",
+    "https://*.chatgpt.site/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.chatgpt.site/*", "http://localhost:3000/*"],
+      "js": ["fluxa-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.google.com/maps/*"],
+      "js": ["maps-scraper.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Fluxa Prospector"
+  }
+}
