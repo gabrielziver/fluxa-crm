@@ -95,6 +95,7 @@ export default function ResearchPanel({
   const [city, setCity] = useState('Curitiba'),
     [state, setState] = useState('PR'),
     [category, setCategory] = useState('todas'),
+    [customCategory, setCustomCategory] = useState(''),
     [limit, setLimit] = useState(50),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -103,8 +104,25 @@ export default function ResearchPanel({
     [scraperFile, setScraperFile] = useState(''),
     [extensionReady, setExtensionReady] = useState(false);
   const activeRequest = useRef('');
-  const categoryLabel: Record<string,string> = { todas:'empresas locais', restaurante:'restaurantes', barbearia:'barbearias', beleza:'salões de beleza', clinica:'clínicas', academia:'academias' };
-  const mapsQuery = `${categoryLabel[category] || 'empresas locais'} em ${city.trim() || state} ${city.trim() ? state : ''}`;
+  const categoryLabel: Record<string, string> = {
+    todas: 'empresas locais',
+    restaurante: 'restaurantes',
+    barbearia: 'barbearias',
+    beleza: 'salões de beleza e estética',
+    clinica: 'clínicas e consultórios',
+    odontologia: 'clínicas odontológicas',
+    academia: 'academias',
+    imobiliaria: 'imobiliárias e corretores de imóveis',
+    energia_solar: 'empresas de energia solar',
+    pet: 'pet shops e clínicas veterinárias',
+    contabilidade: 'escritórios de contabilidade',
+    advocacia: 'escritórios de advocacia',
+    arquitetura: 'escritórios de arquitetura',
+  };
+  const chosenCategory = category === 'personalizado'
+    ? customCategory.trim()
+    : categoryLabel[category] || 'empresas locais';
+  const mapsQuery = `${chosenCategory} em ${city.trim() || state} ${city.trim() ? state : ''}`;
   const request = async (body: Record<string, unknown>): Promise<any> => {
     const response = await fetch('/api/crm/research', {
       method: 'POST',
@@ -161,7 +179,7 @@ export default function ResearchPanel({
       requestId,
       payload: {
         query: mapsQuery,
-        category: categoryLabel[category] || 'negócio local',
+        category: chosenCategory,
         limit: Math.min(60, Math.max(1, limit)),
         onlyWithoutWebsite: true,
       },
@@ -278,9 +296,28 @@ export default function ResearchPanel({
             <option value="barbearia">Barbearias</option>
             <option value="beleza">Salões e estética</option>
             <option value="clinica">Clínicas e consultórios</option>
+            <option value="odontologia">Clínicas odontológicas</option>
             <option value="academia">Academias e fitness</option>
+            <option value="imobiliaria">Imobiliárias e corretores</option>
+            <option value="energia_solar">Empresas de energia solar</option>
+            <option value="pet">Pet shops e veterinárias</option>
+            <option value="contabilidade">Escritórios de contabilidade</option>
+            <option value="advocacia">Escritórios de advocacia</option>
+            <option value="arquitetura">Escritórios de arquitetura</option>
+            <option value="personalizado">Outro nicho…</option>
           </select>
         </label>
+        {category === 'personalizado' && (
+          <label className="custom-niche">
+            Digite o nicho que quer pesquisar
+            <input
+              autoFocus
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+              placeholder="Ex.: empresas de instalação de ar-condicionado"
+            />
+          </label>
+        )}
         <label>
           Meta de resultados
           <input
@@ -293,7 +330,7 @@ export default function ResearchPanel({
         </label>
         <button
           className="primary"
-          disabled={busy || !state || limit < 1 || limit > 60}
+          disabled={busy || !state || !chosenCategory || limit < 1 || limit > 60}
           onClick={automaticSearch}
         >
           <Search size={16} />
