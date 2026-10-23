@@ -527,77 +527,40 @@ const plusDays = (n: number) =>
   new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 
 export async function ensureSeeded() {
+  // O antigo lote demonstrativo de agências não é mais recriado.
+}
+
+async function deleteLeadRows(ids: string[]) {
+  if (!ids.length) return;
   const db = getD1();
-  const found = (
-    await db.prepare("SELECT id FROM leads WHERE id LIKE 'agency-%'").all()
-  ).results as { id: string }[];
-  const ids = new Set(found.map((x) => x.id));
-  const max = await db
-    .prepare('SELECT COALESCE(MAX(lead_number),0) AS value FROM leads')
-    .first<{ value: number }>();
-  let number = max?.value ?? 0;
-  const now = new Date().toISOString();
-  const inserts = AGENCIES.filter((a) => !ids.has(a.id)).map((a) => {
-    const researched = ![
-      'agency-cosmica',
-      'agency-one8020',
-      'agency-lothax',
-      'agency-quartza',
-      'agency-storm',
-      'agency-dyzzi',
-      'agency-include',
-      'agency-tante',
-    ].includes(a.id);
-    return db
-      .prepare(
-        'INSERT OR IGNORE INTO leads (id,lead_number,clinic,location,city,neighborhood,stage,score,score_breakdown,class_name,site_issue,site_problem,instagram,rating,review_count,services,phone,whatsapp_url,rationale,verification_notes,specific_opening,sources_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      )
-      .bind(
-        a.id,
-        ++number,
-        a.name,
-        'Recife · PE',
-        'Recife',
-        '—',
-        researched ? '01 PESQUISADA' : '02 PRONTA',
-        a.priority,
-        'Prioridade da primeira rodada',
-        a.priority === 3 ? 'Alta' : 'Média',
-        a.opportunity,
-        a.opportunity,
-        a.email,
-        0,
-        0,
-        a.focus,
-        VERIFIED_PUBLIC_MOBILES[a.id] || '',
-        a.contact,
-        'Possível parceria; necessidade ainda não confirmada.',
-        researched
-          ? 'Site público identificado. Verifique localização, pessoa e canal antes de abordar.'
-          : 'Serviços verificados em site oficial. Confirmar pessoa e canal antes de enviar.',
-        intro(),
-        JSON.stringify([
-          { type: 'Site oficial', url: a.source, use: 'Serviços declarados' },
-          {
-            type: 'Site / canal a verificar',
-            url: a.contact,
-            use: 'Confirmar canal antes de abordar',
-          },
-        ]),
-        now,
-        now,
-      );
-  });
-  if (inserts.length) await db.batch(inserts);
-  await db.batch(
-    Object.entries(VERIFIED_PUBLIC_MOBILES).map(([id, phone]) =>
-      db
-        .prepare(
-          "UPDATE leads SET phone=? WHERE id=? AND (phone IS NULL OR phone='')",
-        )
-        .bind(phone, id),
-    ),
-  );
+  const placeholders = ids.map(() => '?').join(',');
+  await db.batch([
+    db.prepare(`DELETE FROM previews WHERE lead_id IN (${placeholders})`).bind(...ids),
+    db.prepare(`DELETE FROM lead_events WHERE lead_id IN (${placeholders})`).bind(...ids),
+    db.prepare(`DELETE FROM lead_notes WHERE lead_id IN (${placeholders})`).bind(...ids),
+    db.prepare(`DELETE FROM leads WHERE id IN (${placeholders})`).bind(...ids),
+  ]);
+}
+
+export async function deleteLead(id: string) {
+  if (!isAgency(id || '')) throw new Error('Empresa inválida.');
+  const db = getD1();
+  const exists = await db.prepare('SELECT id FROM leads WHERE id=?').bind(id).first();
+  if (!exists) throw new Error('Empresa não encontrada.');
+  await deleteLeadRows([id]);
+  return bootstrap();
+}
+
+export async function deleteLeadBatch(location: string) {
+  const normalized = location?.trim();
+  if (!normalized) throw new Error('Lote inválido.');
+  const db = getD1();
+  const rows = (await db
+    .prepare("SELECT id FROM leads WHERE id LIKE 'agency-%' AND location=?")
+    .bind(normalized)
+    .all()).results as { id: string }[];
+  await deleteLeadRows(rows.map((row) => row.id));
+  return bootstrap();
 }
 
 export async function bootstrap() {

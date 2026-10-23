@@ -44,7 +44,6 @@ type Data = {
 type Tab = 'dashboard' | 'fila' | 'pesquisa' | 'previews' | 'followups' | 'clientes' | 'guia';
 const CATEGORIES = ['Social Media', 'Landing Page', 'Tráfego Pago', 'Branding', 'Consultoria', 'Desenvolvimento', 'Outros'];
 const emptyClient = () => ({ name: '', status: 'active', category: 'Social Media', receivable: '', expenses: '', totalRevenue: '', referenceMonth: new Date().toISOString().slice(0, 7), services: [{ description: '', value: '' }] });
-const CITIES = ['Recife · PE', 'Curitiba · PR', 'São Paulo · SP'];
 const firstMessage = (lead: Lead) =>
   lead.id?.startsWith('agency-manual-') &&
   lead.specific_opening &&
@@ -81,7 +80,7 @@ export default function Page() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [tab, setTab] = useState<Tab>('dashboard'),
-    [city, setCity] = useState('Recife · PE'),
+    [city, setCity] = useState('Curitiba · PR'),
     [selectedId, setSelectedId] = useState<string | null>(null),
     [query, setQuery] = useState(''),
     [filter, setFilter] = useState('A abordar'),
@@ -220,13 +219,26 @@ export default function Page() {
   };
   const cityBatches = [
     ...new Set([
-      ...CITIES,
       ...(data?.leads || []).map((l) => String(l.location)),
     ]),
   ];
   const action = async (lead: Lead, name: string, value?: number) => {
     if (await post({ id: lead.id, action: name, value })) {
       if (name === 'sale') setSaleValue('');
+    }
+  };
+  const removeLead = async (lead: Lead) => {
+    if (!confirm(`Excluir ${lead.clinic} definitivamente da lista?`)) return;
+    if (await post({ type: 'lead_delete', id: lead.id })) {
+      if (selectedId === lead.id) setSelectedId(null);
+    }
+  };
+  const removeBatch = async (location: string, count: number) => {
+    if (!confirm(`Excluir definitivamente as ${count} empresa${count === 1 ? '' : 's'} do lote ${location}?`)) return;
+    if (await post({ type: 'lead_batch_delete', location })) {
+      const nextLocation = (data?.leads || []).find((lead) => lead.location !== location)?.location || '';
+      if (city === location) setCity(nextLocation);
+      setSelectedId(null);
     }
   };
   const editClient = (client?: Client) => {
@@ -494,24 +506,34 @@ export default function Page() {
                     (l) => l.location === name,
                   ).length;
                   return (
-                    <button
-                      key={name}
-                      className={city === name ? 'selected' : ''}
-                      onClick={() => {
-                        setCity(name);
-                        setQuery('');
-                        setFilter('A abordar');
-                      }}
-                    >
-                      <small>LOTE {String(index + 1).padStart(2, '0')}</small>
-                      <strong>{name}</strong>
-                      <span>
-                        {count} empresa{count === 1 ? '' : 's'}
-                      </span>
-                      <i>
-                        <em style={{ width: `${Math.min(100, count * 2)}%` }} />
-                      </i>
-                    </button>
+                    <div className="batch-card" key={name}>
+                      <button
+                        className={`batch-select ${city === name ? 'selected' : ''}`}
+                        onClick={() => {
+                          setCity(name);
+                          setQuery('');
+                          setFilter('A abordar');
+                        }}
+                      >
+                        <small>LOTE {String(index + 1).padStart(2, '0')}</small>
+                        <strong>{name}</strong>
+                        <span>
+                          {count} empresa{count === 1 ? '' : 's'}
+                        </span>
+                        <i>
+                          <em style={{ width: `${Math.min(100, count * 2)}%` }} />
+                        </i>
+                      </button>
+                      <button
+                        className="batch-delete"
+                        onClick={() => void removeBatch(name, count)}
+                        disabled={busy}
+                        title={`Excluir lote ${name}`}
+                        aria-label={`Excluir lote ${name}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -570,7 +592,18 @@ export default function Page() {
                     >
                       {lead.score >= 3 ? 'Prioridade alta' : 'Prioridade média'}
                     </span>
-                    <span className="stage">{cleanStage(lead.stage)}</span>
+                    <span className="card-status-actions">
+                      <span className="stage">{cleanStage(lead.stage)}</span>
+                      <button
+                        className="lead-delete"
+                        onClick={() => void removeLead(lead)}
+                        disabled={busy}
+                        title={`Excluir ${lead.clinic}`}
+                        aria-label={`Excluir ${lead.clinic}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </span>
                   </div>
                   <h3>{lead.clinic}</h3>
                   <p className="focus">{lead.services}</p>
@@ -961,6 +994,13 @@ export default function Page() {
                       Marcar perdida
                     </button>
                   )}
+                  <button
+                    className="danger delete-lead"
+                    onClick={() => void removeLead(selected)}
+                    disabled={busy}
+                  >
+                    <Trash2 size={15} /> Excluir empresa da lista
+                  </button>
                 </div>
                 <div className="schedule">
                   <label>

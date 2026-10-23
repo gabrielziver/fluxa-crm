@@ -31,3 +31,30 @@
 .card-actions .whatsapp-card-link:hover {
   background: #0d7754;
 }
+.card-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.lead-delete {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #eadbd9;
+  border-radius: 7px;
+  background: #fff;
+  color: #a85a53;
+  padding: 0;
+}
+.lead-delete:hover {
+  background: #fff0ee;
+  color: #9d3932;
+}
+.action-grid .delete-lead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 6px;
+}
