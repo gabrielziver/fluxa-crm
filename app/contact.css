@@ -66,3 +66,17 @@
   gap: 7px;
   margin-top: 6px;
 }
+
+.lead-phone,
+.detail-phone {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  color: #19757b !important;
+  font-size: 11px;
+  font-weight: 750;
+}
+.lead-phone { margin: 8px 0 0; }
+.detail-phone { margin: 8px 0; }
+.lead-phone svg,
+.detail-phone svg { flex: none; }

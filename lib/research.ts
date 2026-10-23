@@ -1,6 +1,6 @@
 import { getD1 } from '@/db';
 import { bootstrap } from '@/lib/crm';
-import { initialMessage } from '@/lib/outreach';
+import { formatBrazilianPhone, initialMessage } from '@/lib/outreach';
 import { env } from 'cloudflare:workers';
 
 const STATES: Record<string, string> = {
@@ -349,7 +349,7 @@ export async function importAgencies(input: {
     } else if (item.osmUrl !== expected) continue;
     const website = cleanUrl(item.website);
     const email = safeText(item.email, 120);
-    const phone = safeText(item.phone, 50);
+    const phone = formatBrazilianPhone(safeText(item.phone, 50));
     const focus = safeText(item.category, 80) || 'negócio local (confirmar serviços)';
     const score = Math.min(4, 1 + Number(!website) + Number(Boolean(phone)) + Number((item.reviewCount || 0) >= 20));
     const opening = initialMessage(city);
@@ -456,7 +456,7 @@ export async function importPastedAgencies(input: {
     const contact = cleanUrl(row.contact);
     const mapUrl = cleanUrl(row.mapUrl);
     const email = safeText(row.email, 120);
-    const phone = safeText(row.phone, 50);
+    const phone = formatBrazilianPhone(safeText(row.phone, 50));
     if (row.contact && !contact)
       throw new Error(`Link inválido para ${name}. Use https://.`);
     if (row.mapUrl && (!mapUrl || !new URL(mapUrl).hostname.endsWith('google.com')))

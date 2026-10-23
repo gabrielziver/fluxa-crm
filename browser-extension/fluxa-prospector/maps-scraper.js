@@ -4,6 +4,18 @@ function numberFrom(text) {
   return Number(String(text || '').replace(/[^\d]/g, '')) || 0;
 }
 
+function normalizePhone(phone) {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) digits = digits.slice(2);
+  if (digits.startsWith('0') && (digits.length === 11 || digits.length === 12)) digits = digits.slice(1);
+  if (!/^\d{10,11}$/.test(digits)) return '';
+  const ddd = digits.slice(0, 2);
+  const number = digits.slice(2);
+  return number.length === 9
+    ? `+55 (${ddd}) ${number.slice(0, 5)}-${number.slice(5)}`
+    : `+55 (${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
+}
+
 function scrapeArticle(article) {
   const placeLink = article.querySelector('a[href*="/maps/place/"]');
   const mapUrl = placeLink?.href || '';
@@ -18,7 +30,7 @@ function scrapeArticle(article) {
   const address = text.find((item) => /^(?:R\.|Rua|Av\.|Avenida|Alameda|Travessa|Estrada|Rodovia|Praça)\s/i.test(item)) || '';
   const category = text.find((item) => /^(?:Barbearia|Restaurante|Café|Academia|Clínica|Consultório|Salão|Centro de estética|Loja|Empresa)$/i.test(item)) || 'negócio local';
   const image = article.querySelector('img[src^="http"]')?.src || '';
-  const phone = text.find((item) => /(?:\(?\d{2}\)?\s*)?(?:9\s*)?\d{4}[-\s]?\d{4}/.test(item)) || '';
+  const phone = normalizePhone(text.find((item) => /(?:\(?\d{2}\)?\s*)?(?:9\s*)?\d{4}[-\s]?\d{4}/.test(item)) || '');
 
   return { name, mapUrl, address, category, image, phone, rating, reviewCount };
 }
@@ -29,22 +41,25 @@ function scrapePlace() {
   const addressButton = document.querySelector('button[data-item-id="address"], button[aria-label^="Endereço:"]');
   const categoryButton = document.querySelector('button[jsaction*="category"]');
   const website = websiteLink?.href || '';
-  const phone = (phoneButton?.getAttribute('data-item-id') || phoneButton?.getAttribute('aria-label') || '')
+  const phone = normalizePhone((phoneButton?.getAttribute('data-item-id') || phoneButton?.getAttribute('aria-label') || '')
     .replace(/^phone:tel:/, '')
     .replace(/^Telefone:\s*/i, '')
-    .trim();
+    .trim());
   const address = (addressButton?.getAttribute('aria-label') || '')
     .replace(/^Endereço:\s*/i, '')
     .trim();
   const category = categoryButton?.textContent?.trim() || '';
   const heading = document.querySelector('h1.DUwDvf, h1');
-  const detailLoaded = Boolean(heading && (addressButton || phoneButton || websiteLink));
+  const detailLoaded = Boolean(heading && (
+    addressButton || phoneButton || websiteLink ||
+    document.querySelector('[data-item-id="hours"], [data-item-id^="oloc"], [role="main"]')
+  ));
   return { website, phone, address, category, websiteVerified: detailLoaded };
 }
 
 async function scrapePlaceWhenReady(requirePhone = false) {
   let details = scrapePlace();
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 18; attempt += 1) {
     if (details.websiteVerified && (!requirePhone || details.phone)) return details;
     await pause(500);
     details = scrapePlace();

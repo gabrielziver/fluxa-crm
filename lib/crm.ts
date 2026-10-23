@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { getD1 } from '@/db';
-import { initialMessage } from '@/lib/outreach';
+import { formatBrazilianPhone, initialMessage } from '@/lib/outreach';
 
 export const STAGES = [
   '01 PESQUISADA',
@@ -659,7 +659,7 @@ export async function updateLead(input: {
   if (input.action === 'update_contact') {
     const contact = input.contact?.trim() || '',
       email = input.email?.trim() || '',
-      phone = input.phone?.trim() || '';
+      phone = formatBrazilianPhone(input.phone);
     if (contact && !/^https:\/\//i.test(contact))
       throw new Error('O site ou link de contato deve começar com https://.');
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))

@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   Mail,
   MessageCircle,
+  Phone,
   Plus,
   Search,
   Send,
@@ -28,7 +29,7 @@ import {
 } from 'lucide-react';
 import ResearchPanel from './ResearchPanel';
 import PreviewStudio from './PreviewStudio';
-import { initialMessage, positiveReplyMessage, secondMessage, whatsappLink } from '@/lib/outreach';
+import { formatBrazilianPhone, initialMessage, positiveReplyMessage, secondMessage, whatsappLink } from '@/lib/outreach';
 
 type Lead = Record<string, any>;
 type Client = Record<string, any>;
@@ -651,6 +652,9 @@ export default function Page() {
                   </div>
                   <h3>{lead.clinic}</h3>
                   <p className="focus">{lead.services}</p>
+                  {lead.phone && (
+                    <p className="lead-phone"><Phone size={14} /> {formatBrazilianPhone(lead.phone)}</p>
+                  )}
                   <div className="opportunity">
                     <span>ONDE PODEMOS AJUDAR</span>
                     <strong>{lead.site_issue}</strong>
@@ -841,6 +845,9 @@ export default function Page() {
               <div className="detail-block">
                 <span>POR QUE ENTRAR EM CONTATO</span>
                 <p>{selected.site_issue}</p>
+                {selected.phone && (
+                  <small className="detail-phone"><Phone size={14} /> {formatBrazilianPhone(selected.phone)}</small>
+                )}
                 <small>{selected.verification_notes}</small>
               </div>
               <div className="detail-block">

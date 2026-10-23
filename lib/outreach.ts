@@ -9,7 +9,7 @@ export const secondMessage =
 export const positiveReplyMessage =
   'Boa! 😁 Vou preparar uma prévia personalizada pra vocês verem o site funcionando.\n\nÉ grátis e sem compromisso!\n\nAssim que ficar pronta, te mando o link! 🚀';
 
-export function whatsappLink(phone?: string, message?: string): string {
+export function normalizeBrazilianPhone(phone?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
   let national =
     digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
@@ -20,10 +20,26 @@ export function whatsappLink(phone?: string, message?: string): string {
     national = national.slice(1);
   }
 
-  if (!/^\d{10,11}$/.test(national)) return '';
+  return /^\d{10,11}$/.test(national) ? `55${national}` : '';
+}
+
+export function formatBrazilianPhone(phone?: string): string {
+  const normalized = normalizeBrazilianPhone(phone);
+  if (!normalized) return phone?.trim() || '';
+  const national = normalized.slice(2);
+  const ddd = national.slice(0, 2);
+  const number = national.slice(2);
+  return number.length === 9
+    ? `+55 (${ddd}) ${number.slice(0, 5)}-${number.slice(5)}`
+    : `+55 (${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
+}
+
+export function whatsappLink(phone?: string, message?: string): string {
+  const normalized = normalizeBrazilianPhone(phone);
+  if (!normalized) return '';
 
   const text = message?.trim()
-    ? `?text=${encodeURIComponent(message.trim())}`
+    ? `&text=${encodeURIComponent(message.trim())}`
     : '';
-  return `https://wa.me/55${national}${text}`;
+  return `https://api.whatsapp.com/send?phone=${normalized}${text}`;
 }

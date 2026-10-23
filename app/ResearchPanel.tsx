@@ -31,6 +31,15 @@ const STATES = [
   'SE',
   'TO',
 ];
+const CAPITALS: Record<string, string> = {
+  AC: 'Rio Branco', AL: 'Maceió', AP: 'Macapá', AM: 'Manaus', BA: 'Salvador',
+  CE: 'Fortaleza', DF: 'Brasília', ES: 'Vitória', GO: 'Goiânia', MA: 'São Luís',
+  MT: 'Cuiabá', MS: 'Campo Grande', MG: 'Belo Horizonte', PA: 'Belém',
+  PB: 'João Pessoa', PR: 'Curitiba', PE: 'Recife', PI: 'Teresina',
+  RJ: 'Rio de Janeiro', RN: 'Natal', RS: 'Porto Alegre', RO: 'Porto Velho',
+  RR: 'Boa Vista', SC: 'Florianópolis', SP: 'São Paulo', SE: 'Aracaju',
+  TO: 'Palmas',
+};
 
 function parseCsv(text: string) {
   const rows: string[][] = [];
@@ -96,7 +105,7 @@ export default function ResearchPanel({
     [state, setState] = useState('PR'),
     [category, setCategory] = useState('todas'),
     [customCategory, setCustomCategory] = useState(''),
-    [limit, setLimit] = useState(50),
+    [limit, setLimit] = useState(10),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [message, setMessage] = useState(''),
@@ -122,7 +131,8 @@ export default function ResearchPanel({
   const chosenCategory = category === 'personalizado'
     ? customCategory.trim()
     : categoryLabel[category] || 'empresas locais';
-  const mapsQuery = `${chosenCategory} em ${city.trim() || state} ${city.trim() ? state : ''}`;
+  const searchCity = city.trim() || CAPITALS[state];
+  const mapsQuery = `${chosenCategory} em ${searchCity} ${state}`;
   const request = async (body: Record<string, unknown>): Promise<any> => {
     const response = await fetch('/api/crm/research', {
       method: 'POST',
@@ -180,7 +190,9 @@ export default function ResearchPanel({
       payload: {
         query: mapsQuery,
         category: chosenCategory,
-        limit: Math.min(60, Math.max(1, limit)),
+        categoryKey: category,
+        location: `${searchCity} ${state}`,
+        limit: Math.min(10, Math.max(1, limit)),
         onlyWithoutWebsite: true,
       },
     }, window.location.origin);
@@ -270,7 +282,7 @@ export default function ResearchPanel({
       </div>
       <div className="research-form">
         <label>
-          Cidade <small>(opcional para buscar no estado inteiro)</small>
+          Cidade <small>(se vazia, pesquisa na capital do estado)</small>
           <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
@@ -323,14 +335,14 @@ export default function ResearchPanel({
           <input
             type="number"
             min="1"
-            max="60"
+            max="10"
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
           />
         </label>
         <button
           className="primary"
-          disabled={busy || !state || !chosenCategory || limit < 1 || limit > 60}
+          disabled={busy || !state || !chosenCategory || limit < 1 || limit > 10}
           onClick={automaticSearch}
         >
           <Search size={16} />
@@ -339,7 +351,7 @@ export default function ResearchPanel({
       </div>
       <p className="research-note">
         {extensionReady
-          ? 'Complemento conectado. O Fluxa verifica o campo “Site” de cada ficha antes de importar; a pesquisa pode levar alguns segundos.'
+          ? 'Complemento conectado. O Fluxa verifica o campo “Site” de cada ficha e traz até 10 empresas qualificadas por rodada. Em “Todos”, ele combina vários nichos automaticamente.'
           : 'Para a pesquisa realmente automática e sem API paga, instale uma única vez o complemento Fluxa Prospector no Brave.'}
       </p>
       {error && <div className="research-error">{error}</div>}

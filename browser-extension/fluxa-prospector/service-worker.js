@@ -11,6 +11,13 @@ const waitForTab = (tabId) => new Promise((resolve, reject) => {
     }
   };
   chrome.tabs.onUpdated.addListener(listener);
+  chrome.tabs.get(tabId, (tab) => {
+    if (tab?.status === 'complete') {
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      setTimeout(resolve, 1800);
+    }
+  });
 });
 
 const askTab = (tabId, message) => new Promise((resolve, reject) => {
@@ -37,10 +44,12 @@ async function inspectPlace(row, fallbackCategory, requirePhone = false) {
   }
 }
 
-async function enrichWithoutWebsite(rows, target, fallbackCategory) {
+async function enrichWithoutWebsite(rows, target, fallbackCategory, seen) {
   const matches = [];
-  for (let index = 0; index < rows.length && matches.length < target; index += 3) {
-    const batch = rows.slice(index, index + 3);
+  const pending = rows.filter((row) => !seen.has(row.mapUrl));
+  for (let index = 0; index < pending.length && matches.length < target; index += 2) {
+    const batch = pending.slice(index, index + 2);
+    batch.forEach((row) => seen.add(row.mapUrl));
     const inspected = await Promise.allSettled(batch.map((row) => inspectPlace(row, fallbackCategory)));
     for (const item of inspected) {
       if (item.status !== 'fulfilled') continue;
@@ -52,22 +61,57 @@ async function enrichWithoutWebsite(rows, target, fallbackCategory) {
   return matches;
 }
 
-async function research(query, limit, category) {
+const MIXED_NICHES = [
+  'academias',
+  'barbearias',
+  'salões de beleza',
+  'clínicas odontológicas',
+  'imobiliárias',
+  'empresas de energia solar',
+  'pet shops',
+  'escritórios de contabilidade',
+  'restaurantes',
+];
+
+async function candidatesFor(query, scanLimit) {
   const url = `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
   const tab = await chrome.tabs.create({ url, active: false });
-  let candidates;
   try {
     await waitForTab(tab.id);
-    const scanLimit = Math.min(90, Math.max(24, limit * 4));
     const response = await askTab(tab.id, { type: 'FLUXA_SCRAPE_MAPS', limit: scanLimit });
-    candidates = response.rows || [];
+    return response.rows || [];
   } finally {
     if (tab.id) await chrome.tabs.remove(tab.id).catch(() => {});
   }
-  const rows = await enrichWithoutWebsite(candidates, limit, category);
-  if (!rows.length)
-    throw new Error('Verifiquei os resultados, mas não encontrei empresas sem site nesta busca. Tente outra região ou um nicho mais específico.');
-  return rows;
+}
+
+async function research(payload) {
+  const requested = Math.min(10, Math.max(1, Number(payload.limit || 10)));
+  const category = String(payload.category || 'negócio local');
+  const location = String(payload.location || '').trim();
+  const queries = payload.categoryKey === 'todas' && location
+    ? MIXED_NICHES.map((niche) => `${niche} em ${location}`)
+    : [String(payload.query || '').trim()];
+  const matches = [];
+  const seen = new Set();
+  let inspectedSearches = 0;
+
+  for (const query of queries) {
+    if (!query || matches.length >= requested) break;
+    try {
+      const remaining = requested - matches.length;
+      const candidates = await candidatesFor(query, Math.min(45, Math.max(18, remaining * 4)));
+      inspectedSearches += 1;
+      const found = await enrichWithoutWebsite(candidates, remaining, category, seen);
+      matches.push(...found);
+    } catch {
+      inspectedSearches += 1;
+    }
+  }
+
+  if (!matches.length)
+    throw new Error(`Pesquisei ${inspectedSearches || 1} grupo(s) no Google Maps, mas nenhum negócio sem site foi confirmado. Informe uma cidade e tente um nicho específico.`);
+  return matches;
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -86,13 +130,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   if (message?.type !== 'FLUXA_SEARCH') return false;
   const query = String(message.payload?.query || '').trim().slice(0, 160);
-  const limit = Math.min(60, Math.max(1, Number(message.payload?.limit || 30)));
+  const limit = Math.min(10, Math.max(1, Number(message.payload?.limit || 10)));
   const category = String(message.payload?.category || 'negócio local').trim().slice(0, 80);
   if (!query) {
     sendResponse({ ok: false, error: 'Informe cidade e nicho para pesquisar.' });
     return false;
   }
-  research(query, limit, category)
+  research({ ...message.payload, query, limit, category })
     .then((rows) => sendResponse({ ok: true, rows }))
     .catch((error) => sendResponse({ ok: false, error: error.message || 'Falha ao pesquisar.' }));
   return true;
