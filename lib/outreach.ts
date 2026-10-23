@@ -11,10 +11,14 @@ export const positiveReplyMessage =
 
 export function whatsappLink(phone?: string, message?: string): string {
   const digits = (phone || '').replace(/\D/g, '');
-  const national =
+  let national =
     digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
       ? digits.slice(2)
       : digits;
+
+  if (national.startsWith('0') && national.length === 11) {
+    national = national.slice(1);
+  }
 
   if (!/^\d{10,11}$/.test(national)) return '';
 
