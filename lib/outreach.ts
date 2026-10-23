@@ -16,7 +16,7 @@ export function whatsappLink(phone?: string, message?: string): string {
       ? digits.slice(2)
       : digits;
 
-  if (national.startsWith('0') && national.length === 11) {
+  if (national.startsWith('0') && (national.length === 11 || national.length === 12)) {
     national = national.slice(1);
   }
 
