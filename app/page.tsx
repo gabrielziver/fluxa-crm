@@ -69,6 +69,10 @@ const safeSources = (value: string) => {
     return [];
   }
 };
+const googleMapsSource = (lead: Lead) =>
+  safeSources(lead.sources_json).find((source) =>
+    source.url.includes('google.com/maps/'),
+  )?.url || '';
 
 export default function Page() {
   const [data, setData] = useState<Data | null>(null),
@@ -155,6 +159,51 @@ export default function Page() {
       notify(label);
     } catch {
       setError('Não foi possível copiar. Selecione o texto manualmente.');
+    }
+  };
+  const lookupWhatsapp = async (lead: Lead) => {
+    const mapUrl = googleMapsSource(lead);
+    if (!mapUrl) {
+      setError('Esta empresa não tem uma ficha do Google Maps salva.');
+      return;
+    }
+    const popup = window.open('', '_blank');
+    if (popup) popup.document.body.textContent = 'Localizando o WhatsApp da empresa…';
+    setBusy(true);
+    try {
+      const requestId = crypto.randomUUID();
+      const phone = await new Promise<string>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener('message', handleResult);
+          reject(new Error('O complemento não respondeu. Atualize o Fluxa Prospector e tente novamente.'));
+        }, 40000);
+        const handleResult = (event: MessageEvent) => {
+          if (event.source !== window || event.data?.requestId !== requestId) return;
+          if (!['FLUXA_PHONE_RESULT', 'FLUXA_PHONE_ERROR'].includes(event.data?.type)) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener('message', handleResult);
+          if (event.data.type === 'FLUXA_PHONE_RESULT') resolve(String(event.data.phone || ''));
+          else reject(new Error(event.data.error || 'Telefone não encontrado.'));
+        };
+        window.addEventListener('message', handleResult);
+        window.postMessage({ type: 'FLUXA_PHONE_REQUEST', requestId, payload: { mapUrl } }, window.location.origin);
+      });
+      const link = whatsappLink(phone, firstMessage(lead));
+      if (!link) throw new Error('O número encontrado não tem um formato válido para WhatsApp.');
+      await post({
+        id: lead.id,
+        action: 'update_contact',
+        contact: lead.whatsapp_url || '',
+        email: lead.instagram || '',
+        phone,
+      });
+      if (popup) popup.location.href = link;
+      else window.open(link, '_blank', 'noopener,noreferrer');
+    } catch (reason) {
+      popup?.close();
+      setError(reason instanceof Error ? reason.message : 'Não foi possível localizar o WhatsApp.');
+    } finally {
+      setBusy(false);
     }
   };
   const selected = data?.leads.find((l) => l.id === selectedId) || null;
@@ -607,7 +656,7 @@ export default function Page() {
                     <strong>{lead.site_issue}</strong>
                   </div>
                   <div className="card-actions">
-                    {whatsappLink(lead.phone, firstMessage(lead)) && (
+                    {whatsappLink(lead.phone, firstMessage(lead)) ? (
                       <a
                         className="whatsapp-card-link"
                         href={whatsappLink(lead.phone, firstMessage(lead))}
@@ -616,6 +665,14 @@ export default function Page() {
                       >
                         <MessageCircle size={16} /> Enviar no WhatsApp
                       </a>
+                    ) : (
+                      <button
+                        className="whatsapp-card-link"
+                        disabled={busy}
+                        onClick={() => void lookupWhatsapp(lead)}
+                      >
+                        <Search size={16} /> Buscar WhatsApp
+                      </button>
                     )}
                     <button
                       className="outline"
@@ -823,7 +880,7 @@ export default function Page() {
                 </button>
               </div>
               <div className="contact-actions">
-                {whatsappLink(selected.phone, firstMessage(selected)) && (
+                {whatsappLink(selected.phone, firstMessage(selected)) ? (
                   <>
                     <a
                       href={whatsappLink(selected.phone, firstMessage(selected))}
@@ -843,6 +900,10 @@ export default function Page() {
                       <Copy size={16} /> {whatsappLink(selected.phone)}
                     </button>
                   </>
+                ) : (
+                  <button disabled={busy} onClick={() => void lookupWhatsapp(selected)}>
+                    <Search size={17} /> Buscar telefone e abrir WhatsApp
+                  </button>
                 )}
                 {selected.whatsapp_url?.startsWith('https://') && (
                   <a

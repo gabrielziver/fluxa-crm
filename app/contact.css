@@ -31,6 +31,14 @@
 .card-actions .whatsapp-card-link:hover {
   background: #0d7754;
 }
+.card-actions button.whatsapp-card-link {
+  border: 0;
+  cursor: pointer;
+}
+.card-actions button.whatsapp-card-link:disabled {
+  cursor: wait;
+  opacity: .62;
+}
 .card-status-actions {
   display: flex;
   align-items: center;

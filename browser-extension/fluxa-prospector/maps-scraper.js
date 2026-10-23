@@ -42,6 +42,16 @@ function scrapePlace() {
   return { website, phone, address, category, websiteVerified: detailLoaded };
 }
 
+async function scrapePlaceWhenReady(requirePhone = false) {
+  let details = scrapePlace();
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (details.websiteVerified && (!requirePhone || details.phone)) return details;
+    await pause(500);
+    details = scrapePlace();
+  }
+  return details;
+}
+
 async function collect(limit) {
   const feed = document.querySelector('[role="feed"]');
   if (!feed) throw new Error('A lista de resultados do Google Maps não apareceu. Tente outra cidade ou nicho.');
@@ -71,8 +81,10 @@ async function collect(limit) {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'FLUXA_SCRAPE_PLACE') {
-    sendResponse({ ok: true, details: scrapePlace() });
-    return false;
+    scrapePlaceWhenReady(Boolean(message.requirePhone))
+      .then((details) => sendResponse({ ok: true, details }))
+      .catch((error) => sendResponse({ ok: false, error: error.message || 'Falha ao ler a empresa.' }));
+    return true;
   }
   if (message?.type === 'FLUXA_SCRAPE_MAPS') {
     collect(Math.min(90, Math.max(1, Number(message.limit || 30))))

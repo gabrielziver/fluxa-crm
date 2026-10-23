@@ -21,11 +21,11 @@ const askTab = (tabId, message) => new Promise((resolve, reject) => {
   });
 });
 
-async function inspectPlace(row, fallbackCategory) {
+async function inspectPlace(row, fallbackCategory, requirePhone = false) {
   const tab = await chrome.tabs.create({ url: row.mapUrl, active: false });
   try {
     await waitForTab(tab.id);
-    const response = await askTab(tab.id, { type: 'FLUXA_SCRAPE_PLACE' });
+    const response = await askTab(tab.id, { type: 'FLUXA_SCRAPE_PLACE', requirePhone });
     return {
       ...row,
       ...response.details,
@@ -71,6 +71,19 @@ async function research(query, limit, category) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'FLUXA_PHONE_LOOKUP') {
+    const mapUrl = String(message.payload?.mapUrl || '');
+    if (!/^https:\/\/(?:www\.)?google\.com\/maps\//i.test(mapUrl)) {
+      sendResponse({ ok: false, error: 'Link público do Google Maps não encontrado.' });
+      return false;
+    }
+    inspectPlace({ mapUrl }, '', true)
+      .then((row) => row.phone
+        ? sendResponse({ ok: true, phone: row.phone })
+        : sendResponse({ ok: false, error: 'O Google Maps não exibiu um telefone público para esta empresa.' }))
+      .catch((error) => sendResponse({ ok: false, error: error.message || 'Falha ao localizar o telefone.' }));
+    return true;
+  }
   if (message?.type !== 'FLUXA_SEARCH') return false;
   const query = String(message.payload?.query || '').trim().slice(0, 160);
   const limit = Math.min(60, Math.max(1, Number(message.payload?.limit || 30)));
